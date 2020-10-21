@@ -355,6 +355,9 @@ parameter_types! {
       SP::UpdateEntityStatus,
 
       SP::UpdateSpaceSettings,
+
+      SP::ManageBadges,
+      SP::ManageAwards
     ].into_iter())),
   };
 }
@@ -554,6 +557,10 @@ impl pallet_faucet::Trait for Runtime {
 	type Event = Event;
 	type Currency = Balances;
 }
+
+impl pallet_badges::Trait for Runtime {
+	type Event = Event;
+}
 */
 
 construct_runtime!(
@@ -592,6 +599,7 @@ construct_runtime!(
 
 		// New experimental pallets. Not recommended to use in production yet.
 
+        // Badges: pallet_badges::{Module, Call, Storage},
 		// Faucet: pallet_faucet::{Module, Call, Storage, Event<T>},
 		// SessionKeys: session_keys::{Module, Call, Storage, Event<T>},
 		// Moderation: pallet_moderation::{Module, Call, Storage, Event<T>},

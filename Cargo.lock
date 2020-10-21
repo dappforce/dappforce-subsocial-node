@@ -3132,6 +3132,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-badges"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-moderation",
+ "pallet-permissions",
+ "pallet-posts",
+ "pallet-profiles",
+ "pallet-roles",
+ "pallet-space-follows",
+ "pallet-spaces",
+ "pallet-timestamp",
+ "pallet-utils",
+ "parity-scale-codec",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-balances"
 version = "2.0.0-rc4"
 source = "git+https://github.com/paritytech/substrate.git?tag=v2.0.0-rc4#00768a1f21a579c478fe5d4f51e1fa71f7db9fd4"
@@ -6259,6 +6282,7 @@ dependencies = [
  "frame-system",
  "node-primitives",
  "pallet-aura",
+ "pallet-badges",
  "pallet-balances",
  "pallet-grandpa",
  "pallet-permissions",

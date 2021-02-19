@@ -107,61 +107,65 @@ mod tests {
         type MaxHandleLen = MaxHandleLen;
     }
 
+    fn default_space_permissions() -> SpacePermissions {
+        SpacePermissions {
+
+            // No permissions disabled by default
+            none: None,
+
+            everyone: Some(SpacePermissionSet::from_iter(vec![
+                SP::UpdateOwnSubspaces,
+                SP::DeleteOwnSubspaces,
+                SP::HideOwnSubspaces,
+
+                SP::UpdateOwnPosts,
+                SP::DeleteOwnPosts,
+                SP::HideOwnPosts,
+
+                SP::CreateComments,
+                SP::UpdateOwnComments,
+                SP::DeleteOwnComments,
+                SP::HideOwnComments,
+
+                SP::Upvote,
+                SP::Downvote,
+                SP::Share,
+            ].into_iter())),
+
+            // Followers can do everything that everyone else can.
+            follower: None,
+
+            space_owner: Some(SpacePermissionSet::from_iter(vec![
+                SP::ManageRoles,
+                SP::RepresentSpaceInternally,
+                SP::RepresentSpaceExternally,
+                SP::OverrideSubspacePermissions,
+                SP::OverridePostPermissions,
+
+                SP::CreateSubspaces,
+                SP::CreatePosts,
+
+                SP::UpdateSpace,
+                SP::UpdateAnySubspace,
+                SP::UpdateAnyPost,
+
+                SP::DeleteAnySubspace,
+                SP::DeleteAnyPost,
+
+                SP::HideAnySubspace,
+                SP::HideAnyPost,
+                SP::HideAnyComment,
+
+                SP::SuggestEntityStatus,
+                SP::UpdateEntityStatus,
+
+                SP::UpdateSpaceSettings,
+            ].into_iter()))
+        }
+    }
+
     parameter_types! {
-      pub DefaultSpacePermissions: SpacePermissions = SpacePermissions {
-
-        // No permissions disabled by default
-        none: None,
-
-        everyone: Some(SpacePermissionSet::from_iter(vec![
-            SP::UpdateOwnSubspaces,
-            SP::DeleteOwnSubspaces,
-            SP::HideOwnSubspaces,
-
-            SP::UpdateOwnPosts,
-            SP::DeleteOwnPosts,
-            SP::HideOwnPosts,
-
-            SP::CreateComments,
-            SP::UpdateOwnComments,
-            SP::DeleteOwnComments,
-            SP::HideOwnComments,
-
-            SP::Upvote,
-            SP::Downvote,
-            SP::Share,
-        ].into_iter())),
-
-        // Followers can do everything that everyone else can.
-        follower: None,
-
-        space_owner: Some(SpacePermissionSet::from_iter(vec![
-            SP::ManageRoles,
-            SP::RepresentSpaceInternally,
-            SP::RepresentSpaceExternally,
-            SP::OverrideSubspacePermissions,
-            SP::OverridePostPermissions,
-
-            SP::CreateSubspaces,
-            SP::CreatePosts,
-
-            SP::UpdateSpace,
-            SP::UpdateAnySubspace,
-            SP::UpdateAnyPost,
-
-            SP::DeleteAnySubspace,
-            SP::DeleteAnyPost,
-
-            SP::HideAnySubspace,
-            SP::HideAnyPost,
-            SP::HideAnyComment,
-
-            SP::SuggestEntityStatus,
-            SP::UpdateEntityStatus,
-
-            SP::UpdateSpaceSettings,
-        ].into_iter())),
-      };
+      pub DefaultSpacePermissions: SpacePermissions = self::default_space_permissions();
     }
 
     impl pallet_permissions::Trait for TestRuntime {
@@ -473,6 +477,32 @@ mod tests {
 
             ext
         }
+
+        /// Custom ext configuration with space that has overridden permission 'CreatePost' to 'everyone'
+        pub fn build_with_space_can_post_permission(permissions: SpacePermissions) -> TestExternalities {
+            let mut storage = system::GenesisConfig::default()
+              .build_storage::<TestRuntime>()
+              .unwrap();
+
+            Self::configure_storages(&mut storage);
+
+            let mut ext = TestExternalities::from(storage);
+            ext.execute_with(|| {
+                System::set_block_number(1);
+
+                assert_ok!(
+                    _create_space(
+                        None,
+                        None,
+                        None,
+                        None,
+                        Some(Some(permissions))
+                    )
+                );
+            });
+
+            ext
+        }
     }
 
 
@@ -513,6 +543,44 @@ mod tests {
 
     fn updated_space_content() -> Content {
         Content::IPFS(b"QmRAQB6YaCyidP37UdDnjFY5vQuiBrcqdyoW2CuDgwxkD4".to_vec())
+    }
+
+    fn everyone_can_create_post_permissions() -> SpacePermissions {
+        let mut default_permissions = default_space_permissions();
+        default_permissions.everyone = default_permissions.everyone
+          .map(|mut permissions| {
+              permissions.insert(SP::CreatePosts);
+              permissions
+          });
+
+        default_permissions
+    }
+
+    fn follower_space_permission_set() -> SpacePermissions {
+        SpacePermissions {
+            none: None,
+            follower: Some(SpacePermissionSet::from_iter(vec![SP::CreatePosts].into_iter())),
+            space_owner: None,
+            everyone: None
+        }
+    }
+
+    fn follower_can_create_post_permissions() -> SpacePermissions {
+        let mut default_permissions = default_space_permissions();
+        default_permissions.follower = self::follower_space_permission_set().follower;
+
+        default_permissions
+    }
+
+    fn space_owner_can_create_post_permissions() -> SpacePermissions {
+        let mut default_permissions = default_space_permissions();
+        default_permissions.space_owner = default_permissions.space_owner
+          .map(|mut permissions| {
+              permissions.insert(SP::CreatePosts);
+              permissions
+          });
+
+        default_permissions
     }
 
     fn space_update(
@@ -1020,6 +1088,64 @@ mod tests {
             // Check that the handle deposit has been reserved:
             let reserved_balance = Balances::reserved_balance(ACCOUNT1);
             assert_eq!(reserved_balance, HANDLE_DEPOSIT);
+        });
+    }
+
+    #[test]
+    fn create_space_should_work_with_everyone_can_post_permission() {
+        ExtBuilder::build_with_space_can_post_permission(everyone_can_create_post_permissions()).execute_with(|| {
+            let space = Spaces::space_by_id(SPACE1).unwrap();
+            assert_eq!(space.permissions, Some(everyone_can_create_post_permissions()));
+        });
+    }
+
+    #[test]
+    fn create_post_should_work_overridden_space_permission_for_everyone() {
+        ExtBuilder::build_with_space_can_post_permission(everyone_can_create_post_permissions()).execute_with(|| {
+            assert_ok!(_create_post(
+                Some(Origin::signed(ACCOUNT2)),
+                None,
+                None,
+                None
+            ));
+        });
+    }
+
+    #[test]
+    fn create_space_should_work_with_followers_can_post_permission() {
+        ExtBuilder::build_with_space_can_post_permission(follower_can_create_post_permissions()).execute_with(|| {
+            let space = Spaces::space_by_id(SPACE1).unwrap();
+            assert_eq!(space.permissions, Some(follower_can_create_post_permissions()));
+        });
+    }
+
+    #[test]
+    fn create_post_should_work_overridden_space_permission_for_followers() {
+        ExtBuilder::build_with_space_can_post_permission(follower_can_create_post_permissions()).execute_with(|| {
+
+            assert_ok!(_default_follow_space());
+
+            assert_ok!(_create_post(
+                Some(Origin::signed(ACCOUNT2)),
+                None,
+                None,
+                None
+            ));
+        });
+    }
+
+    #[test]
+    fn create_space_should_work_with_space_owner_can_post_permission() {
+        ExtBuilder::build_with_space_can_post_permission(space_owner_can_create_post_permissions()).execute_with(|| {
+            let space = Spaces::space_by_id(SPACE1).unwrap();
+            assert_eq!(space.permissions, Some(space_owner_can_create_post_permissions()));
+        });
+    }
+
+    #[test]
+    fn create_post_should_work_overridden_space_permission_for_space_owner() {
+        ExtBuilder::build_with_space_can_post_permission(space_owner_can_create_post_permissions()).execute_with(|| {
+            assert_ok!(_create_default_post());
         });
     }
 
@@ -3089,6 +3215,12 @@ mod tests {
 
             // Check whether storage state is correct
             assert!(SpaceOwnership::pending_space_owner(SPACE1).is_none());
+
+            let owner_reserved_balance = Balances::reserved_balance(ACCOUNT1);
+            assert_eq!(owner_reserved_balance, Zero::zero());
+
+            let recipient_reserved_balance = Balances::reserved_balance(ACCOUNT2);
+            assert_eq!(recipient_reserved_balance, HANDLE_DEPOSIT);
         });
     }
 

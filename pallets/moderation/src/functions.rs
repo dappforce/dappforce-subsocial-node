@@ -6,7 +6,7 @@ use pallet_spaces::Space;
 use pallet_space_follows::Module as SpaceFollows;
 use df_traits::moderation::*;
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
     pub fn require_report(report_id: ReportId) -> Result<Report<T>, DispatchError> {
         Ok(Self::report_by_id(report_id).ok_or(Error::<T>::ReportNotFound)?)
     }
@@ -82,7 +82,7 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> Report<T> {
+impl<T: Config> Report<T> {
     pub fn new(
         id: ReportId,
         created_by: T::AccountId,
@@ -100,7 +100,7 @@ impl<T: Trait> Report<T> {
     }
 }
 
-impl<T: Trait> SuggestedStatus<T> {
+impl<T: Config> SuggestedStatus<T> {
     pub fn new(who: T::AccountId, status: Option<EntityStatus>, report_id: Option<ReportId>) -> Self {
         Self {
             suggested: WhoAndWhen::<T>::new(who),
@@ -111,7 +111,7 @@ impl<T: Trait> SuggestedStatus<T> {
 }
 
 // TODO: maybe simplify using one common trait?
-impl<T: Trait> IsAccountBlocked for Module<T> {
+impl<T: Config> IsAccountBlocked for Module<T> {
     type AccountId = T::AccountId;
 
     fn is_account_blocked(account: Self::AccountId, scope: SpaceId) -> bool {
@@ -121,7 +121,7 @@ impl<T: Trait> IsAccountBlocked for Module<T> {
     }
 }
 
-impl<T: Trait> IsSpaceBlocked for Module<T> {
+impl<T: Config> IsSpaceBlocked for Module<T> {
     fn is_space_blocked(space_id: SpaceId, scope: SpaceId) -> bool {
         let entity = EntityId::Space(space_id);
 
@@ -129,7 +129,7 @@ impl<T: Trait> IsSpaceBlocked for Module<T> {
     }
 }
 
-impl<T: Trait> IsPostBlocked for Module<T> {
+impl<T: Config> IsPostBlocked for Module<T> {
     type PostId = PostId;
 
     fn is_post_blocked(post_id: Self::PostId, scope: SpaceId) -> bool {
@@ -139,7 +139,7 @@ impl<T: Trait> IsPostBlocked for Module<T> {
     }
 }
 
-impl<T: Trait> IsContentBlocked for Module<T> {
+impl<T: Config> IsContentBlocked for Module<T> {
 
     fn is_content_blocked(content: Content, scope: SpaceId) -> bool {
         let entity = EntityId::Content(content);

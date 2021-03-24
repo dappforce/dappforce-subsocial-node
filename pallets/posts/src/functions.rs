@@ -4,7 +4,7 @@ use pallet_utils::{SpaceId, vec_remove_on};
 
 use super::*;
 
-impl<T: Trait> Post<T> {
+impl<T: Config> Post<T> {
 
     pub fn new(
         id: PostId,
@@ -151,7 +151,7 @@ impl Default for PostUpdate {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
     /// Check that there is a `Post` with such `post_id` in the storage
     /// or return`PostNotFound` error.
@@ -318,6 +318,86 @@ impl<T: Trait> Module<T> {
         Self::share_post(creator.clone(), original_post, new_post_id)
     }
 
+    fn mutate_posts_count_on_space<F: FnMut(&mut u32) + Copy> (
+        space_id: SpaceId,
+        post: &Post<T>,
+        mut f: F
+    ) -> DispatchResult {
+        Spaces::<T>::mutate_space_by_id(space_id, |space: &mut Space<T>| {
+            if post.hidden {
+                f(&mut space.hidden_posts_count);
+                f(&mut space.posts_count);
+            } else {
+                f(&mut space.posts_count);
+            }
+        }).map(|_| ())
+    }
+
+    pub(crate) fn move_post_to_space(
+        editor: T::AccountId,
+        post: &mut Post<T>,
+        new_space_id: SpaceId
+    ) -> DispatchResult {
+        let old_space_id = post.get_space_id()?;
+        let new_space = Spaces::<T>::require_space(new_space_id)?;
+
+        ensure!(
+            T::IsAccountBlocked::is_account_blocked(editor.clone(), new_space_id),
+            UtilsError::<T>::AccountIsBlocked
+        );
+
+        Spaces::ensure_account_has_space_permission(
+            editor,
+            &new_space,
+            SpacePermission::CreatePosts,
+            Error::<T>::NoPermissionToCreatePosts.into()
+        )?;
+
+        ensure!(T::IsPostBlocked::is_post_blocked(post.id, new_space_id), UtilsError::<T>::PostIsBlocked);
+        ensure!(
+            T::IsContentBlocked::is_content_blocked(post.content.clone(), new_space_id),
+            UtilsError::<T>::ContentIsBlocked
+        );
+
+        match post.extension {
+            PostExtension::RegularPost | PostExtension::SharedPost(_) => {
+
+                // Substitute posts count from the old space
+                Self::mutate_posts_count_on_space(
+                    old_space_id,
+                    post,
+                    |counter| *counter = counter.saturating_sub(1)
+                )?;
+                // Add posts count to the new space
+                Self::mutate_posts_count_on_space(
+                    new_space_id,
+                    post,
+                    |counter| *counter = counter.saturating_add(1)
+                )?;
+
+                // Substitute score from the old space
+                Spaces::<T>::mutate_space_by_id(
+                    old_space_id,
+                    |space| space.score = space.score.saturating_sub(post.score)
+                )?;
+                // Add score to the new space
+                Spaces::<T>::mutate_space_by_id(
+                    new_space_id,
+                    |space| space.score = space.score.saturating_add(post.score)
+                )?;
+
+                post.space_id = Some(new_space_id);
+
+                PostIdsBySpaceId::mutate(old_space_id, |post_ids| vec_remove_on(post_ids, post.id));
+                PostIdsBySpaceId::mutate(new_space_id, |ids| ids.push(post.id));
+                PostById::<T>::insert(post.id, post);
+
+                Ok(())
+            },
+            _ => fail!(Error::<T>::CannotUpdateSpaceIdOnComment),
+        }
+    }
+
     pub fn delete_post_from_space(post_id: PostId) -> DispatchResult {
         let mut post = Self::require_post(post_id)?;
 
@@ -345,15 +425,15 @@ impl<T: Trait> Module<T> {
             }
         } else {
             let space_id = post.get_space_id()?;
-            Spaces::<T>::mutate_space_by_id(space_id, |space: &mut Space<T>| {
-                if post.hidden {
-                    space.hidden_posts_count = space.hidden_posts_count.saturating_sub(1);
-                } else {
-                    space.posts_count = space.posts_count.saturating_sub(1);
-                }
-
-                space.score = space.score.saturating_sub(post.score);
-            })?;
+            Self::mutate_posts_count_on_space(
+                space_id,
+                &post,
+                |counter| *counter = counter.saturating_sub(1)
+            )?;
+            Spaces::<T>::mutate_space_by_id(
+                space_id,
+                |space| space.score = space.score.saturating_sub(post.score)
+            )?;
             post.space_id = None;
 
             PostIdsBySpaceId::mutate(space_id, |post_ids| vec_remove_on(post_ids, post_id));

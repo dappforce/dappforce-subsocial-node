@@ -1,5 +1,5 @@
 pub mod currency {
-	use node_primitives::Balance;
+	use subsocial_primitives::Balance;
 
 	pub const SMNS: Balance = 1_000_000_000_000;
 	pub const DOLLARS: Balance = SMNS;             // 1_000_000_000_000
@@ -12,7 +12,7 @@ pub mod currency {
 }
 
 pub mod time {
-	use node_primitives::{Moment, BlockNumber};
+	use subsocial_primitives::{Moment, BlockNumber};
 
 	pub const MILLISECS_PER_BLOCK: Moment = 6000;
 	pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;

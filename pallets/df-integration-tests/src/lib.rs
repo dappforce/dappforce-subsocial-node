@@ -1,5 +1,3 @@
-#![cfg_attr(not(feature = "std"), no_std)]
-
 #[cfg(test)]
 mod tests {
     use frame_support::{
@@ -11,14 +9,17 @@ mod tests {
     };
     use sp_core::H256;
     use sp_io::TestExternalities;
-    use sp_std::iter::FromIterator;
-    use sp_runtime::{traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill, Storage};
+    use sp_runtime::{
+        traits::{BlakeTwo256, IdentityLookup},
+        testing::Header,
+        Perbill,
+        Storage,
+    };
     use frame_system::{self as system};
 
     use pallet_permissions::{
         SpacePermission,
         SpacePermission as SP,
-        SpacePermissionSet,
         SpacePermissions,
     };
     use pallet_posts::{PostId, Post, PostUpdate, PostExtension, Comment, Error as PostsError};
@@ -29,6 +30,7 @@ mod tests {
     use pallet_spaces::{SpaceById, SpaceUpdate, Error as SpacesError};
     use pallet_space_follows::Error as SpaceFollowsError;
     use pallet_space_ownership::Error as SpaceOwnershipError;
+    use pallet_moderation::{EntityId, EntityStatus, ReportId};
     use pallet_utils::{SpaceId, Error as UtilsError, User, Content, Module as Utils};
     use sp_runtime::traits::Zero;
 
@@ -107,62 +109,7 @@ mod tests {
         type MaxHandleLen = MaxHandleLen;
     }
 
-    parameter_types! {
-      pub DefaultSpacePermissions: SpacePermissions = SpacePermissions {
-
-        // No permissions disabled by default
-        none: None,
-
-        everyone: Some(SpacePermissionSet::from_iter(vec![
-            SP::UpdateOwnSubspaces,
-            SP::DeleteOwnSubspaces,
-            SP::HideOwnSubspaces,
-
-            SP::UpdateOwnPosts,
-            SP::DeleteOwnPosts,
-            SP::HideOwnPosts,
-
-            SP::CreateComments,
-            SP::UpdateOwnComments,
-            SP::DeleteOwnComments,
-            SP::HideOwnComments,
-
-            SP::Upvote,
-            SP::Downvote,
-            SP::Share,
-        ].into_iter())),
-
-        // Followers can do everything that everyone else can.
-        follower: None,
-
-        space_owner: Some(SpacePermissionSet::from_iter(vec![
-            SP::ManageRoles,
-            SP::RepresentSpaceInternally,
-            SP::RepresentSpaceExternally,
-            SP::OverrideSubspacePermissions,
-            SP::OverridePostPermissions,
-
-            SP::CreateSubspaces,
-            SP::CreatePosts,
-
-            SP::UpdateSpace,
-            SP::UpdateAnySubspace,
-            SP::UpdateAnyPost,
-
-            SP::DeleteAnySubspace,
-            SP::DeleteAnyPost,
-
-            SP::HideAnySubspace,
-            SP::HideAnyPost,
-            SP::HideAnyComment,
-
-            SP::SuggestEntityStatus,
-            SP::UpdateEntityStatus,
-
-            SP::UpdateSpaceSettings,
-        ].into_iter())),
-      };
-    }
+    use pallet_permissions::default_permissions::DefaultSpacePermissions;
 
     impl pallet_permissions::Trait for TestRuntime {
         type DefaultSpacePermissions = DefaultSpacePermissions;
@@ -177,6 +124,7 @@ mod tests {
         type MaxCommentDepth = MaxCommentDepth;
         type PostScores = Scores;
         type AfterPostUpdated = PostHistory;
+        type IsPostBlocked = Moderation;
     }
 
     parameter_types! {}
@@ -502,6 +450,10 @@ mod tests {
         b"Space_Handle".to_vec()
     }
 
+    fn space_handle1() -> Vec<u8> {
+        b"space_handle2".to_vec()
+    }
+
     /// Returns an invalid cropped IPFS CID.
     fn invalid_ipfs_content() -> Content {
         Content::IPFS(b"QmV9tSDx9UiPeWExXEeH6aoDvmihvx6j".to_vec())
@@ -520,14 +472,14 @@ mod tests {
         handle: Option<Option<Vec<u8>>>,
         content: Option<Content>,
         hidden: Option<bool>,
-        permissions: Option<Option<SpacePermissions>>
+        permissions: Option<Option<SpacePermissions>>,
     ) -> SpaceUpdate {
         SpaceUpdate {
             parent_id,
             handle,
             content,
             hidden,
-            permissions
+            permissions,
         }
     }
 
@@ -542,7 +494,7 @@ mod tests {
     fn post_update(
         space_id: Option<SpaceId>,
         content: Option<Content>,
-        hidden: Option<bool>
+        hidden: Option<bool>,
     ) -> PostUpdate {
         PostUpdate {
             space_id,
@@ -642,7 +594,7 @@ mod tests {
     fn _update_space(
         origin: Option<Origin>,
         space_id: Option<SpaceId>,
-        update: Option<SpaceUpdate>
+        update: Option<SpaceUpdate>,
     ) -> DispatchResult {
         Spaces::update_space(
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
@@ -681,7 +633,7 @@ mod tests {
         origin: Option<Origin>,
         space_id_opt: Option<Option<SpaceId>>,
         extension: Option<PostExtension>,
-        content: Option<Content>
+        content: Option<Content>,
     ) -> DispatchResult {
         Posts::create_post(
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
@@ -703,6 +655,22 @@ mod tests {
         )
     }
 
+    fn _move_default_post() -> DispatchResult {
+        _move_post(None, None, None)
+    }
+
+    fn _move_post(
+        origin: Option<Origin>,
+        post_id: Option<PostId>,
+        new_space_id: Option<Option<SpaceId>>,
+    ) -> DispatchResult {
+        Posts::move_post(
+            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
+            post_id.unwrap_or(POST1),
+            new_space_id.unwrap_or(Some(SPACE2)),
+        )
+    }
+
     fn _create_default_comment() -> DispatchResult {
         _create_comment(None, None, None, None)
     }
@@ -718,7 +686,7 @@ mod tests {
             Some(None),
             Some(self::extension_comment(
                 parent_id.unwrap_or(None),
-                post_id.unwrap_or(POST1)
+                post_id.unwrap_or(POST1),
             )),
             Some(content.unwrap_or_else(self::comment_content_ipfs)),
         )
@@ -727,7 +695,7 @@ mod tests {
     fn _update_comment(
         origin: Option<Origin>,
         post_id: Option<PostId>,
-        update: Option<PostUpdate>
+        update: Option<PostUpdate>,
     ) -> DispatchResult {
         _update_post(
             origin,
@@ -749,7 +717,7 @@ mod tests {
     fn _create_post_reaction(
         origin: Option<Origin>,
         post_id: Option<PostId>,
-        kind: Option<ReactionKind>
+        kind: Option<ReactionKind>,
     ) -> DispatchResult {
         Reactions::create_post_reaction(
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
@@ -761,7 +729,7 @@ mod tests {
     fn _create_comment_reaction(
         origin: Option<Origin>,
         post_id: Option<PostId>,
-        kind: Option<ReactionKind>
+        kind: Option<ReactionKind>,
     ) -> DispatchResult {
         _create_post_reaction(origin, Some(post_id.unwrap_or(2)), kind)
     }
@@ -770,7 +738,7 @@ mod tests {
         origin: Option<Origin>,
         post_id: Option<PostId>,
         reaction_id: ReactionId,
-        kind: Option<ReactionKind>
+        kind: Option<ReactionKind>,
     ) -> DispatchResult {
         Reactions::update_post_reaction(
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
@@ -784,7 +752,7 @@ mod tests {
         origin: Option<Origin>,
         post_id: Option<PostId>,
         reaction_id: ReactionId,
-        kind: Option<ReactionKind>
+        kind: Option<ReactionKind>,
     ) -> DispatchResult {
         _update_post_reaction(origin, Some(post_id.unwrap_or(2)), reaction_id, kind)
     }
@@ -792,7 +760,7 @@ mod tests {
     fn _delete_post_reaction(
         origin: Option<Origin>,
         post_id: Option<PostId>,
-        reaction_id: ReactionId
+        reaction_id: ReactionId,
     ) -> DispatchResult {
         Reactions::delete_post_reaction(
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
@@ -804,7 +772,7 @@ mod tests {
     fn _delete_comment_reaction(
         origin: Option<Origin>,
         post_id: Option<PostId>,
-        reaction_id: ReactionId
+        reaction_id: ReactionId,
     ) -> DispatchResult {
         _delete_post_reaction(origin, Some(post_id.unwrap_or(2)), reaction_id)
     }
@@ -860,7 +828,7 @@ mod tests {
     fn _score_post_on_reaction_with_id(
         account: AccountId,
         post_id: PostId,
-        kind: ReactionKind
+        kind: ReactionKind,
     ) -> DispatchResult {
         if let Some(ref mut post) = Posts::post_by_id(post_id) {
             Scores::score_post_on_reaction(account, post, kind)
@@ -872,7 +840,7 @@ mod tests {
     fn _score_post_on_reaction(
         account: AccountId,
         post: &mut Post<TestRuntime>,
-        kind: ReactionKind
+        kind: ReactionKind,
     ) -> DispatchResult {
         Scores::score_post_on_reaction(account, post, kind)
     }
@@ -884,7 +852,7 @@ mod tests {
     fn _transfer_space_ownership(
         origin: Option<Origin>,
         space_id: Option<SpaceId>,
-        transfer_to: Option<AccountId>
+        transfer_to: Option<AccountId>,
     ) -> DispatchResult {
         SpaceOwnership::transfer_space_ownership(
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
@@ -988,8 +956,315 @@ mod tests {
         )
     }
     /* ---------------------------------------------------------------------------------------------- */
+    // Moderation pallet mocks
+    const REPORT1: ReportId = 1;
 
+    pub(crate) fn valid_content_ipfs_1() -> Content {
+        Content::IPFS(b"QmRAQB6YaCaidP37UdDnjFY5aQuiBrbqdyoW1CaDgwxkD4".to_vec())
+    }
 
+    pub(crate) fn _report_default_entity() -> DispatchResult {
+        _report_entity(None, None, None, None)
+    }
+
+    pub(crate) fn _report_entity(
+        origin: Option<Origin>,
+        entity: Option<EntityId<AccountId>>,
+        scope: Option<SpaceId>,
+        reason: Option<Content>,
+    ) -> DispatchResult {
+        Moderation::report_entity(
+            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
+            entity.unwrap_or(EntityId::Post(POST1)),
+            scope.unwrap_or(SPACE1),
+            reason.unwrap_or_else(|| self::valid_content_ipfs_1()),
+        )
+    }
+
+    pub(crate) fn _suggest_entity_status(
+        origin: Option<Origin>,
+        entity: Option<EntityId<AccountId>>,
+        scope: Option<SpaceId>,
+        status: Option<Option<EntityStatus>>,
+        report_id_opt: Option<Option<ReportId>>,
+    ) -> DispatchResult {
+        Moderation::suggest_entity_status(
+            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
+            entity.unwrap_or(EntityId::Post(POST1)),
+            scope.unwrap_or(SPACE1),
+            status.unwrap_or(Some(EntityStatus::Blocked)),
+            report_id_opt.unwrap_or(Some(REPORT1)),
+        )
+    }
+
+    pub(crate) fn _update_entity_status(
+        origin: Option<Origin>,
+        entity: Option<EntityId<AccountId>>,
+        scope: Option<SpaceId>,
+        status_opt: Option<Option<EntityStatus>>,
+    ) -> DispatchResult {
+        Moderation::update_entity_status(
+            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
+            entity.unwrap_or(EntityId::Post(POST1)),
+            scope.unwrap_or(SPACE1),
+            status_opt.unwrap_or(Some(EntityStatus::Allowed)),
+        )
+    }
+
+    pub(crate) fn _delete_entity_status(
+        origin: Option<Origin>,
+        entity: Option<EntityId<AccountId>>,
+        scope: Option<SpaceId>,
+    ) -> DispatchResult {
+        Moderation::delete_entity_status(
+            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
+            entity.unwrap_or(EntityId::Post(POST1)),
+            scope.unwrap_or(SPACE1),
+        )
+    }
+    /*------------------------------------------------------------------------------------------------*/
+    // Moderation tests
+
+    #[test]
+    fn create_space_should_fail_with_content_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Content(space_content_ipfs())),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _create_space(
+                    None,
+                    Some(Some(SPACE1)),
+                    Some(Some(space_handle1())),
+                    Some(space_content_ipfs()),
+                    None,
+                ), UtilsError::<TestRuntime>::ContentIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn create_space_should_fail_with_account_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Account(ACCOUNT1)),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _create_space(
+                    None,
+                    Some(Some(SPACE1)),
+                    Some(Some(space_handle1())),
+                    None,
+                    None,
+                ), UtilsError::<TestRuntime>::AccountIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn update_space_should_fail_with_account_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Account(ACCOUNT1)),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _update_space(
+                    None,
+                    None,
+                    Some(
+                        self::space_update(
+                            None,
+                            Some(Some(space_handle1())),
+                            Some(valid_content_ipfs_1()),
+                            Some(true),
+                            Some(Some(SpacePermissions {
+                                none: None,
+                                everyone: None,
+                                follower: None,
+                                space_owner: None
+                            })),
+                        )
+                )), UtilsError::<TestRuntime>::AccountIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn update_space_should_fail_with_content_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Content(valid_content_ipfs_1())),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _update_space(
+                    None,
+                    None,
+                    Some(
+                        self::space_update(
+                            None,
+                            Some(Some(space_handle())),
+                            Some(valid_content_ipfs_1()),
+                            Some(true),
+                            Some(Some(SpacePermissions {
+                                none: None,
+                                everyone: None,
+                                follower: None,
+                                space_owner: None
+                            })),
+                        )
+                )), UtilsError::<TestRuntime>::ContentIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn create_post_should_fail_with_content_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Content(valid_content_ipfs_1())),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _create_post(
+                    None,
+                    None,
+                    None,
+                    Some(valid_content_ipfs_1()),
+                ), UtilsError::<TestRuntime>::ContentIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn create_post_should_fail_with_account_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Account(ACCOUNT1)),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _create_post(
+                    None,
+                    None,
+                    None,
+                    None
+                ), UtilsError::<TestRuntime>::AccountIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn update_post_should_fail_with_content_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Content(valid_content_ipfs_1())),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _update_post(
+                    None, // From ACCOUNT1 (has default permission to UpdateOwnPosts)
+                    None,
+                    Some(
+                        self::post_update(
+                            None,
+                            Some(valid_content_ipfs_1()),
+                            Some(true)
+                        )
+                    )
+                ), UtilsError::<TestRuntime>::ContentIsBlocked
+            );
+        });
+    }
+
+    #[test]
+    fn update_post_should_fail_with_account_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Account(ACCOUNT1)),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _update_post(
+                    None, // From ACCOUNT1 (has default permission to UpdateOwnPosts)
+                    None,
+                    Some(
+                        self::post_update(
+                            None,
+                            Some(valid_content_ipfs_1()),
+                            Some(true)
+                        )
+                    )
+                ), UtilsError::<TestRuntime>::AccountIsBlocked
+            );
+        });
+    }
+
+    // FIXME: uncomment when `update_post` will be able to move post from one space to another
+    /*
+    #[test]
+    fn update_post_should_fail_with_post_is_blocked() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(
+                _update_entity_status(
+                    None,
+                    Some(EntityId::Post(POST1)),
+                    Some(SPACE1),
+                    Some(Some(EntityStatus::Blocked))
+                )
+            );
+            assert_noop!(
+                _update_post(
+                    None, // From ACCOUNT1 (has default permission to UpdateOwnPosts)
+                    Some(POST1),
+                    Some(
+                        self::post_update(
+                            Some(SPACE1),
+                            None,
+                            None
+                        )
+                    )
+                ), UtilsError::<TestRuntime>::PostIsBlocked
+            );
+        });
+    }
+    */
+    /*---------------------------------------------------------------------------------------------------*/
     // Space tests
     #[test]
     fn create_space_should_work() {
@@ -1635,6 +1910,110 @@ mod tests {
         });
     }
 
+    // TODO: after merging w/ moderation tests check whether `delete_post_from_space` tests exist
+    #[test]
+    fn move_post_should_work() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(_create_space(None, None, Some(None), None, None));
+            assert_ok!(_create_default_post_reaction());
+            assert_ok!(_move_default_post());
+
+            let post: Post<TestRuntime> = Posts::post_by_id(POST1).unwrap();
+            let old_space_id = SPACE1;
+            let new_space_id = post.space_id.unwrap();
+            assert_eq!(new_space_id, SPACE2);
+
+            let old_space = Spaces::space_by_id(old_space_id).unwrap();
+            assert_eq!(old_space.posts_count, 0);
+            assert_eq!(old_space.hidden_posts_count, 0);
+            assert_eq!(old_space.score, 0);
+
+            let new_space = Spaces::space_by_id(new_space_id).unwrap();
+            assert_eq!(new_space.posts_count, 1);
+            assert_eq!(new_space.hidden_posts_count, 0);
+            assert_eq!(new_space.score, post.score);
+
+            assert!(Posts::post_ids_by_space_id(old_space_id).is_empty());
+            assert_eq!(Posts::post_ids_by_space_id(new_space_id), vec![POST1]);
+        });
+    }
+
+    #[test]
+    fn move_hidden_post_should_work() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(_create_space(None, None, Some(None), None, None));
+            assert_ok!(_create_default_post_reaction());
+            assert_ok!(_update_post(
+                None,
+                None,
+                Some(self::post_update(
+                    Some(SPACE2),
+                    None,
+                    Some(true)
+                ))
+            ));
+            assert_ok!(_move_default_post());
+
+            let post: Post<TestRuntime> = Posts::post_by_id(POST1).unwrap();
+            let old_space_id = SPACE1;
+            let new_space_id = post.space_id.unwrap();
+            assert_eq!(new_space_id, SPACE2);
+
+            let old_space = Spaces::space_by_id(old_space_id).unwrap();
+            assert_eq!(old_space.posts_count, 0);
+            assert_eq!(old_space.hidden_posts_count, 0);
+            assert_eq!(old_space.score, 0);
+
+            let new_space = Spaces::space_by_id(new_space_id).unwrap();
+            assert_eq!(new_space.posts_count, 1);
+            assert_eq!(new_space.hidden_posts_count, 1);
+            assert_eq!(new_space.score, post.score);
+        });
+    }
+
+    #[test]
+    fn move_hidden_post_should_fail_post_not_found() {
+        ExtBuilder::build().execute_with(|| {
+            assert_noop!(
+                _move_default_post(),
+                PostsError::<TestRuntime>::PostNotFound
+            );
+        });
+    }
+
+    #[test]
+    fn move_hidden_post_should_fail_new_space_not_found() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_noop!(
+                _move_default_post(),
+                SpacesError::<TestRuntime>::SpaceNotFound
+            );
+        });
+    }
+
+    #[test]
+    fn move_hidden_post_should_fail_no_permission_to_create_post() {
+        ExtBuilder::build_with_post().execute_with(|| {
+            assert_ok!(_create_space(Some(Origin::signed(ACCOUNT2)), None, Some(None), None, None));
+            assert_noop!(
+                _move_default_post(),
+                PostsError::<TestRuntime>::NoPermissionToCreatePosts
+            );
+        });
+    }
+
+    #[test]
+    fn move_hidden_post_should_fail_cannot_move_comment() {
+        ExtBuilder::build_with_comment().execute_with(|| {
+            assert_ok!(_create_space(None, None, Some(None), None, None));
+
+            assert_noop!(
+                _move_post(None, Some(POST2), None),
+                PostsError::<TestRuntime>::CannotUpdateSpaceIdOnComment
+            );
+        });
+    }
+
     #[test]
     fn update_post_should_work_after_transfer_space_ownership() {
         ExtBuilder::build_with_post().execute_with(|| {
@@ -1831,7 +2210,7 @@ mod tests {
 
             for comment_id in first_comment_id..penultimate_comment_id as PostId {
                 let comment = Posts::post_by_id(comment_id).unwrap();
-                let replies_should_be = last_comment_id-comment_id;
+                let replies_should_be = last_comment_id - comment_id;
                 assert_eq!(comment.replies_count, replies_should_be as u16);
                 assert_eq!(Posts::reply_ids_by_post_id(comment_id), vec![comment_id + 1]);
 

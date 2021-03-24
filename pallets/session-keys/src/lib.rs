@@ -16,11 +16,11 @@
 use codec::{Decode, Encode};
 use sp_std::prelude::*;
 use sp_runtime::RuntimeDebug;
-use sp_runtime::traits::{Zero, Dispatchable, Saturating, SaturatedConversion};
+use sp_runtime::traits::{Zero, Dispatchable, Saturating};
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage, ensure,
+    decl_error, decl_event, decl_module, decl_storage, ensure, fail,
     weights::{
-        GetDispatchInfo, DispatchClass, WeighData,
+        GetDispatchInfo, DispatchClass, WeighData, WeightToFeePolynomial,
         Weight, ClassifyDispatch, PaysFee, Pays,
     },
     dispatch::{DispatchError, DispatchResult, PostDispatchInfo},
@@ -34,20 +34,17 @@ use frame_system::{self as system, ensure_signed};
 
 use pallet_utils::WhoAndWhen;
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 struct CalculateProxyWeight<T: Trait>(Box<<T as Trait>::Call>);
 
 impl<T: Trait> WeighData<(&Box<<T as Trait>::Call>,)> for CalculateProxyWeight<T> {
     fn weigh_data(&self, target: (&Box<<T as Trait>::Call>,)) -> Weight {
-        let call_dispatch_info = target.0.get_dispatch_info();
-        let db_weight = T::DbWeight::get();
-        let mut weight = call_dispatch_info.weight;
-
-        match call_dispatch_info.pays_fee {
-            Pays::Yes => weight = weight.saturating_add(db_weight.reads_writes(1, 1)),
-            Pays::No => weight = weight.saturating_add(db_weight.reads_writes(1, 0)),
-        }
-
-        weight
+        target.0.get_dispatch_info().weight
     }
 }
 
@@ -58,12 +55,13 @@ impl<T: Trait> ClassifyDispatch<(&Box<<T as Trait>::Call>,)> for CalculateProxyW
 }
 
 impl<T: Trait> PaysFee<(&Box<<T as Trait>::Call>,)> for CalculateProxyWeight<T> {
-    fn pays_fee(&self, _target: (&Box<<T as Trait>::Call>,)) -> Pays {
-        Pays::Yes
+    fn pays_fee(&self, target: (&Box<<T as Trait>::Call>,)) -> Pays {
+        target.0.get_dispatch_info().pays_fee
     }
 }
 
-type BalanceOf<T> = <<T as pallet_utils::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> =
+    <<T as transaction_payment::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 // TODO define session key permissions
 
@@ -88,7 +86,10 @@ pub struct SessionKey<T: Trait> {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait + pallet_utils::Trait {
+pub trait Trait: system::Trait
+    + pallet_utils::Trait
+    + transaction_payment::Trait
+{
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
@@ -103,6 +104,9 @@ pub trait Trait: system::Trait + pallet_utils::Trait {
 
     /// Base Call filter for the session keys' proxy
     type BaseFilter: Filter<<Self as Trait>::Call>;
+
+    /// The amount of money transferred to session key
+    type BaseSessionKeyBond: Get<BalanceOf<Self>>;
 }
 
 decl_event!(
@@ -134,7 +138,7 @@ decl_error! {
         /// Reached the limit of tokens this session key can spend.
         SessionKeyLimitReached,
         /// Only a session key owner can manage their keys.
-        NeitherSessionKeyOwnerNorExpired,
+        NotASessionKeyOwner,
     }
 }
 
@@ -166,13 +170,15 @@ decl_module! {
 
         const MaxSessionKeysPerAccount: u16 = T::MaxSessionKeysPerAccount::get();
 
+        const BaseSessionKeyBond: BalanceOf<T> = T::BaseSessionKeyBond::get();
+
         // Initializing errors
         type Error = Error<T>;
 
         // Initializing events
         fn deposit_event() = default;
 
-        /// Add a new SessionKey for `origin` bonding 2 * Existential Deposit to keep session alive
+        /// Add a new SessionKey for `origin` bonding `BaseSessionKeyBond` to keep session alive
         #[weight = 10_000 + T::DbWeight::get().reads_writes(3, 3)]
         fn add_key(origin,
             key_account: T::AccountId,
@@ -215,7 +221,7 @@ decl_module! {
             let who = ensure_signed(origin)?;
 
             let key = Self::require_key(key_account.clone())?;
-            key.ensure_owner_or_expired(who.clone())?;
+            ensure!(key.is_owner(&who), Error::<T>::NotASessionKeyOwner);
 
             // Deposits event on success
             Self::try_remove_key(who, key_account)?;
@@ -245,39 +251,38 @@ decl_module! {
 
             if details.is_expired() {
                 Self::try_remove_key(details.created.account, key)?;
-                return Err(Error::<T>::SessionKeyExpired.into());
+                fail!(Error::<T>::SessionKeyExpired);
             }
 
             let real = details.owner();
             let can_spend: BalanceOf<T>;
 
-            // TODO get limit from account settings
-
-            if let Some(limit) = details.limit {
-                can_spend = limit.saturating_sub(details.spent);
-                ensure!(can_spend > Zero::zero(), Error::<T>::SessionKeyLimitReached);
-            }
+            // TODO check that this call is among allowed calls per this account/session key.
+            let mut origin: T::Origin = frame_system::RawOrigin::Signed(real.clone()).into();
+			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
+				let c = <T as Trait>::Call::from_ref(c);
+				T::BaseFilter::filter(c)
+			});
 
             let call_dispatch_info = call.get_dispatch_info();
             if call_dispatch_info.pays_fee == Pays::Yes {
-                let spent_on_call = BalanceOf::<T>::saturated_from(call_dispatch_info.weight.into())
-                    .saturating_mul(BalanceOf::<T>::from(2));
-                T::Currency::transfer(&real, &key, spent_on_call, ExistenceRequirement::KeepAlive)?;
+                let spent_on_call = Self::get_extrinsic_fees(call.clone());
 
-                // TODO: what if balance left is less than InclusionFee on the next call?
+                // TODO get limit from account settings
+                if let Some(limit) = details.limit {
+                    can_spend = limit.saturating_sub(details.spent);
+                    ensure!(can_spend >= spent_on_call, Error::<T>::SessionKeyLimitReached);
+                }
+
+                <T as transaction_payment::Trait>::Currency::transfer(&real, &key, spent_on_call, ExistenceRequirement::KeepAlive)?;
+
+                // TODO: what if balance left is less than fees on the next call?
 
                 details.spent = details.spent.saturating_add(spent_on_call);
                 details.updated = Some(WhoAndWhen::<T>::new(key.clone()));
 
                 KeyDetails::<T>::insert(key, details);
             }
-
-            // TODO check that this call is among allowed calls per this account/session key.
-            let mut origin: T::Origin = frame_system::RawOrigin::Signed(real).into();
-			origin.add_filter(move |c: &<T as frame_system::Trait>::Call| {
-				let c = <T as Trait>::Call::from_ref(c);
-				T::BaseFilter::filter(c)
-			});
 
             let e = call.dispatch(origin);
             Self::deposit_event(RawEvent::ProxyExecuted(e.map(|_| ()).map_err(|e| e.error)));
@@ -322,14 +327,6 @@ impl<T: Trait> SessionKey<T> {
     pub fn is_expired(&self) -> bool {
         self.expires_at <= <system::Module<T>>::block_number()
     }
-
-    pub fn ensure_owner_or_expired(&self, maybe_owner: T::AccountId) -> DispatchResult {
-        ensure!(
-            self.is_owner(&maybe_owner) || self.is_expired(),
-            Error::<T>::NeitherSessionKeyOwnerNorExpired
-        );
-        Ok(())
-    }
 }
 
 impl<T: Trait> Module<T> {
@@ -361,20 +358,31 @@ impl<T: Trait> Module<T> {
         owner: &T::AccountId,
         amount: Option<BalanceOf<T>>
     ) -> DispatchResult {
-        T::Currency::transfer(
+        <T as transaction_payment::Trait>::Currency::transfer(
             key_account,
             owner,
-            amount.unwrap_or_else(|| T::Currency::free_balance(key_account)),
+            amount.unwrap_or_else(||
+                <T as transaction_payment::Trait>::Currency::free_balance(key_account)
+            ),
             ExistenceRequirement::AllowDeath
         )
     }
 
     fn keep_session_alive(source: &T::AccountId, key_account: &T::AccountId) -> DispatchResult {
-        T::Currency::transfer(
+        <T as transaction_payment::Trait>::Currency::transfer(
             source,
             key_account,
-            T::Currency::minimum_balance().saturating_mul(BalanceOf::<T>::from(2)),
+            T::BaseSessionKeyBond::get(),
             ExistenceRequirement::KeepAlive
         )
+    }
+
+    fn get_extrinsic_fees(call: Box<<T as Trait>::Call>) -> BalanceOf<T> {
+        let byte_fee = T::TransactionByteFee::get();
+        let call_length = call.encode().len() as u32;
+        let length_fee = BalanceOf::<T>::from(call_length).saturating_mul(byte_fee);
+        let weight_fee = T::WeightToFee::calc(&call.get_dispatch_info().weight);
+
+        length_fee + weight_fee
     }
 }

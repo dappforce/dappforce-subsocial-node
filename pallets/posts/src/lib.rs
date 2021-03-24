@@ -2,24 +2,27 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage,
+    decl_error, decl_event, decl_module, decl_storage, fail,
     dispatch::{DispatchError, DispatchResult}, ensure, traits::Get,
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed};
 
-use df_traits::moderation::{IsAccountBlocked, IsContentBlocked};
+use df_traits::moderation::{IsAccountBlocked, IsContentBlocked, IsPostBlocked};
 use pallet_permissions::SpacePermission;
 use pallet_spaces::{Module as Spaces, Space, SpaceById};
-use pallet_utils::{Module as Utils, Error as UtilsError, SpaceId, WhoAndWhen, Content};
+use pallet_utils::{
+    Module as Utils, Error as UtilsError,
+    SpaceId, WhoAndWhen, Content
+};
 
 pub mod functions;
 
 pub type PostId = u64;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct Post<T: Trait> {
+pub struct Post<T: Config> {
     pub id: PostId,
     pub created: WhoAndWhen<T>,
     pub updated: Option<WhoAndWhen<T>>,
@@ -69,12 +72,12 @@ impl Default for PostExtension {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait
-    + pallet_utils::Trait
-    + pallet_spaces::Trait
+pub trait Config: system::Config
+    + pallet_utils::Config
+    + pallet_spaces::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     /// Max comments depth
     type MaxCommentDepth: Get<u32>;
@@ -82,14 +85,16 @@ pub trait Trait: system::Trait
     type PostScores: PostScores<Self>;
 
     type AfterPostUpdated: AfterPostUpdated<Self>;
+
+    type IsPostBlocked: IsPostBlocked<PostId=PostId>;
 }
 
-pub trait PostScores<T: Trait> {
+pub trait PostScores<T: Config> {
     fn score_post_on_new_share(account: T::AccountId, original_post: &mut Post<T>) -> DispatchResult;
     fn score_root_post_on_new_comment(account: T::AccountId, root_post: &mut Post<T>) -> DispatchResult;
 }
 
-impl<T: Trait> PostScores<T> for () {
+impl<T: Config> PostScores<T> for () {
     fn score_post_on_new_share(_account: T::AccountId, _original_post: &mut Post<T>) -> DispatchResult {
         Ok(())
     }
@@ -99,13 +104,13 @@ impl<T: Trait> PostScores<T> for () {
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(10)]
-pub trait AfterPostUpdated<T: Trait> {
+pub trait AfterPostUpdated<T: Config> {
     fn after_post_updated(account: T::AccountId, post: &Post<T>, old_data: PostUpdate);
 }
 
 // This pallet's storage items.
 decl_storage! {
-    trait Store for Module<T: Trait> as PostsModule {
+    trait Store for Module<T: Config> as PostsModule {
         pub NextPostId get(fn next_post_id): PostId = 1;
 
         pub PostById get(fn post_by_id): map hasher(twox_64_concat) PostId => Option<Post<T>>;
@@ -124,17 +129,18 @@ decl_storage! {
 
 decl_event!(
     pub enum Event<T> where
-        <T as system::Trait>::AccountId,
+        <T as system::Config>::AccountId,
     {
         PostCreated(AccountId, PostId),
         PostUpdated(AccountId, PostId),
         PostDeleted(AccountId, PostId),
         PostShared(AccountId, PostId),
+        PostMoved(AccountId, PostId),
     }
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
 
         // Post related errors:
 
@@ -148,6 +154,8 @@ decl_error! {
         CannotCreateInHiddenScope,
         /// Post has no any replies
         NoRepliesOnPost,
+        /// Trying to move post to the same space.
+        MoveToTheSameSpace,
 
         // Sharing related errors:
 
@@ -189,7 +197,7 @@ decl_error! {
 }
 
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
     const MaxCommentDepth: u32 = T::MaxCommentDepth::get();
 
@@ -211,13 +219,14 @@ decl_module! {
       Utils::<T>::is_valid_content(content.clone())?;
 
       let new_post_id = Self::next_post_id();
-      let new_post: Post<T> = Post::new(new_post_id, creator.clone(), space_id_opt, extension, content);
+      let new_post: Post<T> = Post::new(new_post_id, creator.clone(), space_id_opt, extension, content.clone());
 
       // Get space from either space_id_opt or Comment if a comment provided
       let space = &mut new_post.get_space()?;
       ensure!(!space.hidden, Error::<T>::CannotCreateInHiddenScope);
 
       ensure!(!T::IsAccountBlocked::is_account_blocked(creator.clone(), space.id), UtilsError::<T>::AccountIsBlocked);
+      ensure!(!T::IsContentBlocked::is_content_blocked(content, space.id), UtilsError::<T>::ContentIsBlocked);
 
       let root_post = &mut new_post.get_root_post()?;
       ensure!(!root_post.hidden, Error::<T>::CannotCreateInHiddenScope);
@@ -261,45 +270,48 @@ decl_module! {
       let editor = ensure_signed(origin)?;
 
       let has_updates =
-        // update.space_id.is_some() ||
         update.content.is_some() ||
         update.hidden.is_some();
 
       ensure!(has_updates, Error::<T>::NoUpdatesForPost);
 
       let mut post = Self::require_post(post_id)?;
+      let mut space_opt = post.try_get_space();
 
-      let is_owner = post.is_owner(&editor);
-      let is_comment = post.is_comment();
+      if let Some(space) = &space_opt {
+        ensure!(!T::IsAccountBlocked::is_account_blocked(editor.clone(), space.id), UtilsError::<T>::AccountIsBlocked);
 
-      let permission_to_check: SpacePermission;
-      let permission_error: DispatchError;
+        let is_owner = post.is_owner(&editor);
+        let is_comment = post.is_comment();
 
-      if is_comment {
-        if is_owner {
-          permission_to_check = SpacePermission::UpdateOwnComments;
-          permission_error = Error::<T>::NoPermissionToUpdateOwnComments.into();
-        } else {
-          return Err(Error::<T>::NotACommentAuthor.into());
+        let permission_to_check: SpacePermission;
+        let permission_error: DispatchError;
+
+        if is_comment {
+          if is_owner {
+            permission_to_check = SpacePermission::UpdateOwnComments;
+            permission_error = Error::<T>::NoPermissionToUpdateOwnComments.into();
+          } else {
+            return Err(Error::<T>::NotACommentAuthor.into());
+          }
+        } else { // not a comment
+          if is_owner {
+            permission_to_check = SpacePermission::UpdateOwnPosts;
+            permission_error = Error::<T>::NoPermissionToUpdateOwnPosts.into();
+          } else {
+            permission_to_check = SpacePermission::UpdateAnyPost;
+            permission_error = Error::<T>::NoPermissionToUpdateAnyPost.into();
+          }
         }
-      } else { // not a comment
-        if is_owner {
-          permission_to_check = SpacePermission::UpdateOwnPosts;
-          permission_error = Error::<T>::NoPermissionToUpdateOwnPosts.into();
-        } else {
-          permission_to_check = SpacePermission::UpdateAnyPost;
-          permission_error = Error::<T>::NoPermissionToUpdateAnyPost.into();
-        }
+
+        Spaces::ensure_account_has_space_permission(
+          editor.clone(),
+          space,
+          permission_to_check,
+          permission_error
+        )?;
       }
 
-      Spaces::ensure_account_has_space_permission(
-        editor.clone(),
-        &post.get_space()?,
-        permission_to_check,
-        permission_error
-      )?;
-
-      let mut space_opt: Option<Space<T>> = None;
       let mut is_update_applied = false;
       let mut old_data = PostUpdate::default();
 
@@ -307,11 +319,11 @@ decl_module! {
         if content != post.content {
           Utils::<T>::is_valid_content(content.clone())?;
 
-          if let Some(space_id) = post.try_get_space_id() {
-              ensure!(!T::IsContentBlocked::is_content_blocked(content.clone(), space_id), UtilsError::<T>::ContentIsBlocked);
+          if let Some(space) = &space_opt {
+              ensure!(!T::IsContentBlocked::is_content_blocked(content.clone(), space.id), UtilsError::<T>::ContentIsBlocked);
           }
 
-          old_data.content = Some(post.content);
+          old_data.content = Some(post.content.clone());
           post.content = content;
           is_update_applied = true;
         }
@@ -319,7 +331,7 @@ decl_module! {
 
       if let Some(hidden) = update.hidden {
         if hidden != post.hidden {
-          space_opt = post.try_get_space().map(|mut space| {
+          space_opt = space_opt.map(|mut space| {
             if hidden {
                 space.inc_hidden_posts();
             } else {
@@ -339,36 +351,6 @@ decl_module! {
         }
       }
 
-      /*
-      // Move this post to another space:
-      if let Some(space_id) = update.space_id {
-        ensure!(post.is_root_post(), Error::<T>::CannotUpdateSpaceIdOnComment);
-
-        if let Some(post_space_id) = post.space_id {
-          if space_id != post_space_id {
-            Spaces::<T>::ensure_space_exists(space_id)?;
-            // TODO check that the current user has CreatePosts permission in new space_id.
-            // TODO test whether new_space.posts_count increases
-            // TODO test whether new_space.hidden_posts_count increases if post is hidden
-            // TODO update (hidden_)replies_count of ancestors
-            // TODO check whether post and its content are not blocked within a new space
-            // TODO test whether reactions are updated correctly:
-            //  - subtract score from an old space
-            //  - add score to a new space
-
-            // Remove post_id from its old space:
-            PostIdsBySpaceId::mutate(post_space_id, |post_ids| vec_remove_on(post_ids, post_id));
-
-            // Add post_id to its new space:
-            PostIdsBySpaceId::mutate(space_id, |ids| ids.push(post_id));
-            old_data.space_id = post.space_id;
-            post.space_id = Some(space_id);
-            is_update_applied = true;
-          }
-        }
-      }
-      */
-
       // Update this post only if at least one field should be updated:
       if is_update_applied {
         post.updated = Some(WhoAndWhen::<T>::new(editor.clone()));
@@ -382,6 +364,34 @@ decl_module! {
 
         Self::deposit_event(RawEvent::PostUpdated(editor, post_id));
       }
+      Ok(())
+    }
+
+    #[weight = T::DbWeight::get().reads(1) + 50_000]
+    pub fn move_post(origin, post_id: PostId, new_space_id: Option<SpaceId>) -> DispatchResult {
+      let who = ensure_signed(origin)?;
+
+      let post = &mut Self::require_post(post_id)?;
+
+      ensure!(new_space_id != post.space_id, Error::<T>::MoveToTheSameSpace);
+
+      let old_space_id = post.space_id;
+
+      if let Some(space_id) = new_space_id {
+        Self::move_post_to_space(who.clone(), post, space_id)?;
+      } else {
+        Self::delete_post_from_space(post_id)?;
+      }
+
+      let historical_data = PostUpdate {
+        space_id: old_space_id,
+        content: None,
+        hidden: None,
+      };
+
+      T::AfterPostUpdated::after_post_updated(who.clone(), &post, historical_data);
+
+      Self::deposit_event(RawEvent::PostMoved(who, post_id));
       Ok(())
     }
   }

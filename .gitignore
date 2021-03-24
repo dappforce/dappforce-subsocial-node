@@ -6,6 +6,8 @@
 
 **/customSpec.json
 
+.cargo-remote.toml
+
 # IDE's config
 **/.idea
 **/.vscode

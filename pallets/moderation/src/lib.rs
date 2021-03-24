@@ -32,13 +32,11 @@ use pallet_utils::{Content, WhoAndWhen, SpaceId, Module as Utils};
 use pallet_posts::PostId;
 use pallet_spaces::Module as Spaces;
 
-/*
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
-*/
 
 pub mod functions;
 
@@ -94,7 +92,7 @@ pub struct SpaceModerationSettings {
 // TODO rename to ModerationSettingsUpdate?
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct SpaceModerationSettingsUpdate {
-    autoblock_threshold: Option<Option<u16>>
+    pub autoblock_threshold: Option<Option<u16>>
 }
 
 /// The pallet's configuration trait.
@@ -301,8 +299,9 @@ decl_module! {
                 }
             }
 
-            Self::deposit_event(RawEvent::EntityStatusSuggested(who, scope, entity.clone(), status));
-            SuggestedStatusesByEntityInSpace::<T>::insert(entity, scope, suggestions);
+            SuggestedStatusesByEntityInSpace::<T>::insert(entity.clone(), scope, suggestions);
+
+            Self::deposit_event(RawEvent::EntityStatusSuggested(who, scope, entity, status));
             Ok(())
         }
 

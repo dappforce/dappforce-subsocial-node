@@ -1,6 +1,6 @@
 [package]
 name = 'pallet-space-follows'
-version = '0.5.0'
+version = '0.6.0'
 authors = ['DappForce <dappforce@pm.me>']
 edition = '2018'
 license = 'GPL-3.0-only'
@@ -17,52 +17,26 @@ std = [
     'frame-support/std',
     'frame-system/std',
     'sp-std/std',
-    'pallet-utils/std',
     'df-traits/std',
     'pallet-profiles/std',
-    'pallet-spaces/std'
+    'pallet-spaces/std',
+    'pallet-utils/std',
 ]
 
 [dependencies.codec]
 default-features = false
 features = ['derive']
 package = 'parity-scale-codec'
-version = '1.3.1'
+version = '2.0.0'
 
-[dependencies.frame-support]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
+[dependencies]
+# Local depenpdencies
+df-traits = { default-features = false, path = '../traits' }
+pallet-profiles = { default-features = false, path = '../profiles' }
+pallet-spaces = { default-features = false, path = '../spaces' }
+pallet-utils = { default-features = false, path = '../utils' }
 
-[dependencies.frame-system]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dependencies.sp-std]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dependencies.pallet-utils]
-default-features = false
-path = '../utils'
-version = '0.5.0'
-
-[dependencies.df-traits]
-default-features = false
-path = '../traits'
-version = '0.5.0'
-
-[dependencies.pallet-profiles]
-default-features = false
-path = '../profiles'
-version = '0.5.0'
-
-[dependencies.pallet-spaces]
-default-features = false
-path = '../spaces'
-version = '0.5.0'
+# Substrate dependencies
+frame-support = { default-features = false, version = '3.0.0' }
+frame-system = { default-features = false, version = '3.0.0' }
+sp-std = { default-features = false, version = '3.0.0' }

@@ -26,6 +26,14 @@ pub trait IsPostBlocked {
     fn is_post_blocked(post_id: Self::PostId, scope: SpaceId) -> bool;
 }
 
+impl IsPostBlocked for () {
+    type PostId = u64;
+
+    fn is_post_blocked(_post_id: Self::PostId, _scope: SpaceId) -> bool {
+        false
+    }
+}
+
 pub trait IsContentBlocked {
     fn is_content_blocked(content: Content, scope: SpaceId) -> bool;
 }

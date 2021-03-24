@@ -29,7 +29,7 @@ mod tests;
 type RoleId = u64;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct Role<T: Trait> {
+pub struct Role<T: Config> {
     pub created: WhoAndWhen<T>,
     pub updated: Option<WhoAndWhen<T>>,
     pub id: RoleId,
@@ -48,12 +48,12 @@ pub struct RoleUpdate {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait
-    + pallet_permissions::Trait
-    + pallet_utils::Trait
+pub trait Config: system::Config
+    + pallet_permissions::Config
+    + pallet_utils::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     type MaxUsersToProcessPerDeleteRole: Get<u16>;
 
@@ -68,7 +68,7 @@ pub trait Trait: system::Trait
 
 decl_event!(
     pub enum Event<T> where
-        <T as system::Trait>::AccountId
+        <T as system::Config>::AccountId
     {
         RoleCreated(AccountId, SpaceId, RoleId),
         RoleUpdated(AccountId, RoleId),
@@ -79,7 +79,7 @@ decl_event!(
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Role was not found by id.
         RoleNotFound,
         /// RoleId counter storage overflowed.
@@ -103,7 +103,7 @@ decl_error! {
 
 // This pallet's storage items.
 decl_storage! {
-    trait Store for Module<T: Trait> as PermissionsModule {
+    trait Store for Module<T: Config> as PermissionsModule {
 
         /// The next role id.
         pub NextRoleId get(fn next_role_id): RoleId = 1;
@@ -128,7 +128,7 @@ decl_storage! {
 
 // The pallet's dispatchable functions.
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
     const MaxUsersToProcessPerDeleteRole: u16 = T::MaxUsersToProcessPerDeleteRole::get();
 

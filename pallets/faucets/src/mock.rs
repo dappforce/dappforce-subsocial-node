@@ -64,16 +64,6 @@ impl system::Trait for Test {
 }
 
 parameter_types! {
-    pub const MinimumPeriod: u64 = 5;
-}
-
-impl pallet_timestamp::Trait for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type MinimumPeriod = MinimumPeriod;
-}
-
-parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
 }
 
@@ -83,18 +73,6 @@ impl pallet_balances::Trait for Test {
     type Event = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
-}
-
-parameter_types! {
-    pub const MinHandleLen: u32 = 5;
-    pub const MaxHandleLen: u32 = 50;
-}
-
-impl pallet_utils::Trait for Test {
-    type Event = ();
-    type Currency = Balances;
-    type MinHandleLen = MinHandleLen;
-    type MaxHandleLen = MaxHandleLen;
 }
 
 impl Trait for Test {
@@ -188,14 +166,14 @@ pub(crate) const ACCOUNT1: AccountId = 11;
 
 pub(crate) const INITIAL_BLOCK_NUMBER: BlockNumber = 20;
 
-pub(crate) const fn default_faucet() -> Faucet<Test> {
+pub(crate) fn default_faucet() -> Faucet<Test> {
     Faucet {
         enabled: true,
         period: 100,
         period_limit: 50,
         drip_limit: 25,
 
-        next_period_at: 0,
+        next_period_at: System::block_number(),
         dripped_in_current_period: 0,
     }
 }
@@ -210,14 +188,15 @@ pub(crate) const fn default_faucet_update() -> FaucetUpdate<BlockNumber, Balance
 }
 
 pub(crate) fn _add_default_faucet() -> DispatchResult {
-    _add_faucet(None, None)
+    _add_faucet(None, None, None)
 }
 
 pub(crate) fn _add_faucet(
     origin: Option<Origin>,
     faucet_account: Option<AccountId>,
+    settings_opt: Option<Faucet<Test>>,
 ) -> DispatchResult {
-    let settings =  default_faucet();
+    let settings = settings_opt.unwrap_or_else(default_faucet);
     Faucets::add_faucet(
         origin.unwrap_or_else(Origin::root),
         faucet_account.unwrap_or(FAUCET1),

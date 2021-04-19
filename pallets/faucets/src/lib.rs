@@ -33,7 +33,7 @@ mod mock;
 mod tests;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct Faucet<T: Trait> {
+pub struct Faucet<T: Config> {
 
     // Settings
     pub enabled: bool,
@@ -54,19 +54,19 @@ pub struct FaucetUpdate<BlockNumber, Balance> {
     pub drip_limit: Option<Balance>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait {
+pub trait Config: system::Config {
 
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     type Currency: Currency<Self::AccountId>;
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as FaucetsModule {
+    trait Store for Module<T: Config> as FaucetsModule {
 
         /// Get a faucet data by its account id.
         pub FaucetByAccount get(fn faucet_by_account):
@@ -77,7 +77,7 @@ decl_storage! {
 
 decl_event!(
     pub enum Event<T> where
-        AccountId = <T as system::Trait>::AccountId,
+        AccountId = <T as system::Config>::AccountId,
         Balance = BalanceOf<T>
     {
         FaucetAdded(AccountId),
@@ -92,7 +92,7 @@ decl_event!(
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         FaucetNotFound,
         FaucetAlreadyAdded,
         NoFreeBalanceOnFaucet,
@@ -115,7 +115,7 @@ decl_error! {
 }
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
         // Initializing errors
         type Error = Error<T>;
 
@@ -230,7 +230,7 @@ decl_module! {
 
             ensure_root(origin)?;
 
-            ensure!(faucets.len() != Zero::zero(), Error::<T>::NoFaucetsProvided);
+            ensure!(!faucets.len().is_zero(), Error::<T>::NoFaucetsProvided);
 
             let unique_faucets = BTreeSet::from_iter(faucets.iter());
             for faucet in unique_faucets.iter() {
@@ -298,7 +298,7 @@ decl_module! {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
     pub fn require_faucet(faucet: &T::AccountId) -> Result<Faucet<T>, DispatchError> {
         Ok(Self::faucet_by_account(faucet).ok_or(Error::<T>::FaucetNotFound)?)
@@ -320,7 +320,7 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> Faucet<T> {
+impl<T: Config> Faucet<T> {
 
     pub fn new(
         period: T::BlockNumber,

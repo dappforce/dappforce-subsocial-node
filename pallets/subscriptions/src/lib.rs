@@ -89,13 +89,14 @@ pub trait Trait:
 	system::Trait
 	+ pallet_utils::Trait
 	+ pallet_spaces::Trait
+	+ pallet_sudo::Trait
 {
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
 	type Subscription: Dispatchable<Origin=<Self as system::Trait>::Origin> + From<Call<Self>>;
 
-	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Subscription>;
+	type Scheduler: ScheduleNamed<Self::BlockNumber, Self::Subscription, Self::Origin>;
 
 	type DailyPeriodInBlocks: Get<Self::BlockNumber>;
 
@@ -266,7 +267,7 @@ decl_module! {
 
 			for id in plan_subscriptions {
 				if let Ok(mut subscription) = Self::require_subscription(*id) {
-					Self::cancel_recurring_payment(*id);
+					Self::cancel_recurring_subscription_payment(*id);
 					subscription.is_active = false;
 					SubscriptionById::<T>::insert(id, subscription);
 				}
@@ -333,7 +334,7 @@ decl_module! {
 				plan_id
 			);
 
-			Self::schedule_recurring_payment(subscription_id, plan.period.clone())?;
+			Self::schedule_recurring_subscription_payment(subscription_id, plan.period.clone())?;
 
 			let recipient = plan.try_get_recipient();
 			ensure!(recipient.is_some(), Error::<T>::RecipientNotFound);
@@ -345,7 +346,7 @@ decl_module! {
 				plan.price,
 				ExistenceRequirement::KeepAlive
 			).map_err(|err| {
-				Self::cancel_recurring_payment(subscription_id);
+				Self::cancel_recurring_subscription_payment(subscription_id);
 				err
 			})?;
 
@@ -419,7 +420,7 @@ decl_module! {
 
 		#[weight = T::DbWeight::get().reads_writes(4, 1) + 25_000]
 		pub fn process_subscription_payment(origin, subscription_id: SubscriptionId) -> DispatchResult {
-			let _ = ensure_root(origin)?;
+			ensure_root(origin)?;
 
 			// todo: remove recurring payment if something in this block goes wrong
 			let mut subscription = Self::require_subscription(subscription_id)?;

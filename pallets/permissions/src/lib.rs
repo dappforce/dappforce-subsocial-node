@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use codec::{Decode, Encode};
+#[cfg(feature = "std")]
+use serde::{Serialize, Deserialize};
 use frame_support::{
   decl_module,
   traits::Get
@@ -17,6 +19,7 @@ use pallet_utils::SpaceId;
 pub mod default_permissions;
 
 #[derive(Encode, Decode, Ord, PartialOrd, Clone, Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum SpacePermission {
   /// Create, update, delete, grant and revoke roles in this space.
   ManageRoles,
@@ -87,6 +90,7 @@ pub enum SpacePermission {
 pub type SpacePermissionSet = BTreeSet<SpacePermission>;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SpacePermissions {
   pub none: Option<SpacePermissionSet>,
   pub everyone: Option<SpacePermissionSet>,
@@ -114,12 +118,12 @@ pub struct SpacePermissionsContext {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait {
+pub trait Config: system::Config {
   type DefaultSpacePermissions: Get<SpacePermissions>;
 }
 
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
     const DefaultSpacePermissions: SpacePermissions = T::DefaultSpacePermissions::get();
   }
 }
@@ -135,7 +139,7 @@ impl SpacePermission {
   }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
   fn get_overrides_or_defaults(
     overrides: Option<SpacePermissionSet>,

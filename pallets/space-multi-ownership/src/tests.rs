@@ -42,10 +42,11 @@ impl system::Trait for Test {
   type MaximumBlockLength = MaximumBlockLength;
   type AvailableBlockRatio = AvailableBlockRatio;
   type Version = ();
-  type ModuleToIndex = ();
+  type PalletInfo = ();
   type AccountData = pallet_balances::AccountData<u64>;
   type OnNewAccount = ();
   type OnKilledAccount = ();
+  type SystemWeightInfo = ();
 }
 
 parameter_types! {
@@ -56,10 +57,12 @@ impl pallet_timestamp::Trait for Test {
   type Moment = u64;
   type OnTimestampSet = ();
   type MinimumPeriod = MinimumPeriod;
+  type WeightInfo = ();
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+  pub const ExistentialDeposit: u64 = 1;
+  pub const MaxLocks: u32 = 50;
 }
 
 impl pallet_balances::Trait for Test {
@@ -68,6 +71,8 @@ impl pallet_balances::Trait for Test {
   type Event = ();
   type ExistentialDeposit = ExistentialDeposit;
   type AccountStore = System;
+  type WeightInfo = ();
+  type MaxLocks = MaxLocks;
 }
 
 parameter_types! {
@@ -369,7 +374,7 @@ fn propose_change_should_work() {
     // Check whether data is stored correctly
     let change = MultiOwnership::change_by_id(1).unwrap();
     assert_eq!(change.add_owners, vec![ACCOUNT3]);
-    assert_eq!(change.remove_owners, vec![]);
+    assert!(change.remove_owners.is_empty());
     assert_eq!(change.new_threshold, Some(3));
     assert_eq!(change.notes, self::change_note());
     assert_eq!(change.confirmed_by, vec![ACCOUNT1]);
@@ -608,7 +613,7 @@ fn cancel_proposal_should_work() {
 
     // Check storages
     let set_to_vec: Vec<u64> = MultiOwnership::pending_change_ids().iter().cloned().collect();
-    assert_eq!(set_to_vec, vec![]);
+    assert!(set_to_vec.is_empty());
     assert_eq!(MultiOwnership::pending_change_id_by_space_id(1), None);
     assert_eq!(MultiOwnership::next_change_id(), 2);
     assert!(MultiOwnership::change_by_id(1).is_none());

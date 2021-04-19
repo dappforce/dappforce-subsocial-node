@@ -173,7 +173,7 @@ decl_module! {
         origin,
         recipient: DonationRecipient<T::AccountId>,
         amount: BalanceOf<T>,
-        comment_content: Content
+        _comment_content: Content
     ) -> DispatchResult {
         let supporter = ensure_signed(origin)?;
 
@@ -205,7 +205,7 @@ decl_module! {
         };
 
         // Transfer donated tokens from a supporter to a donation wallet of this reason.
-        T::Currency::transfer(&supporter, &donation_wallet, amount, ExistenceRequirement::KeepAlive)?;
+        <T as pallet_utils::Trait>::Currency::transfer(&supporter, &donation_wallet, amount, ExistenceRequirement::KeepAlive)?;
 
         DonationById::<T>::insert(donation_id, donation);
         DonationIdsBySupporter::<T>::mutate(supporter.clone(), |ids| ids.push(donation_id));

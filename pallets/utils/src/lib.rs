@@ -2,19 +2,21 @@
 
 use codec::{Decode, Encode};
 use frame_support::{
-    decl_error, decl_module, decl_storage, decl_event,
+    decl_error, decl_event, decl_module, decl_storage,
     dispatch::{DispatchError, DispatchResult}, ensure,
     traits::{
         Currency, Get,
         Imbalance, OnUnbalanced,
     },
 };
+use frame_system as system;
+#[cfg(feature = "std")]
+use serde::Deserialize;
 use sp_runtime::RuntimeDebug;
 use sp_std::{
     collections::btree_set::BTreeSet,
     prelude::*,
 };
-use frame_system::{self as system};
 
 #[cfg(test)]
 mod mock;
@@ -22,16 +24,19 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod rpc;
+
 pub type SpaceId = u64;
+pub type PostId = u64;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct WhoAndWhen<T: Trait> {
+pub struct WhoAndWhen<T: Config> {
     pub account: T::AccountId,
     pub block: T::BlockNumber,
     pub time: T::Moment,
 }
 
-impl<T: Trait> WhoAndWhen<T> {
+impl<T: Config> WhoAndWhen<T> {
     pub fn new(account: T::AccountId) -> Self {
         WhoAndWhen {
             account,
@@ -48,6 +53,8 @@ pub enum User<AccountId> {
 }
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[cfg_attr(feature = "std", derive(Deserialize))]
+#[cfg_attr(feature = "std", serde(tag = "contentType", content = "contentId"))]
 pub enum Content {
     /// No content.
     None,
@@ -59,6 +66,23 @@ pub enum Content {
     Hyper(Vec<u8>),
 }
 
+impl Into<Vec<u8>> for Content {
+    fn into(self) -> Vec<u8> {
+        match self {
+            Content::None => b"None".to_vec(),
+            Content::Raw(vec_u8) => vec_u8,
+            Content::IPFS(vec_u8) => vec_u8,
+            Content::Hyper(vec_u8) => vec_u8,
+        }
+    }
+}
+
+impl Default for Content {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 impl Content {
     pub fn is_none(&self) -> bool {
         self == &Self::None
@@ -67,16 +91,20 @@ impl Content {
     pub fn is_some(&self) -> bool {
         !self.is_none()
     }
+
+    pub fn is_ipfs(&self) -> bool {
+        matches!(self, Self::IPFS(_))
+    }
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as system::Config>::AccountId>>::Balance;
 
-type NegativeImbalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::NegativeImbalance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::NegativeImbalance;
 
-pub trait Trait: system::Trait + pallet_timestamp::Trait
+pub trait Config: system::Config + pallet_timestamp::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     /// The currency mechanism.
     type Currency: Currency<Self::AccountId>;
@@ -89,7 +117,7 @@ pub trait Trait: system::Trait + pallet_timestamp::Trait
 }
 
 decl_storage! {
-    trait Store for Module<T: Trait> as UtilsModule {
+    trait Store for Module<T: Config> as UtilsModule {
         pub TreasuryAccount get(fn treasury_account) build(|config| config.treasury_account.clone()): T::AccountId;
     }
     add_extra_genesis {
@@ -105,7 +133,7 @@ decl_storage! {
 }
 
 decl_module! {
-    pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+    pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
         const MinHandleLen: u32 = T::MinHandleLen::get();
 
@@ -120,7 +148,7 @@ decl_module! {
 }
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Account is blocked in a given space.
         AccountIsBlocked,
         /// Content is blocked in a given space.
@@ -160,8 +188,8 @@ pub fn log_2(x: u32) -> Option<u32> {
     if x > 0 {
         Some(
             num_bits::<u32>() as u32
-            - x.leading_zeros()
-            - 1
+                - x.leading_zeros()
+                - 1
         )
     } else { None }
 }
@@ -173,7 +201,11 @@ pub fn vec_remove_on<F: PartialEq>(vector: &mut Vec<F>, element: F) {
     }
 }
 
-impl<T: Trait> Module<T> {
+pub fn from_bool_to_option(value: bool) -> Option<bool> {
+    Some(value).filter(|v| *v == true)
+}
+
+impl<T: Config> Module<T> {
 
     pub fn is_valid_content(content: Content) -> DispatchResult {
         match content {
@@ -185,7 +217,7 @@ impl<T: Trait> Module<T> {
                 // IPFS CID v1 is 59 bytes.df-integration-tests/src/lib.rs:272:5
                 ensure!(len == 46 || len == 59, Error::<T>::InvalidIpfsCid);
                 Ok(())
-            },
+            }
             Content::Hyper(_) => Err(Error::<T>::HypercoreContentTypeNotSupported.into())
         }
     }
@@ -240,7 +272,7 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
+impl<T: Config> OnUnbalanced<NegativeImbalanceOf<T>> for Module<T> {
     fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<T>) {
         let numeric_amount = amount.peek();
         let treasury_account = TreasuryAccount::<T>::get();

@@ -17,6 +17,7 @@ use codec::{Decode, Encode};
 use sp_std::prelude::*;
 use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Zero, Dispatchable, Saturating};
+use pallet_transaction_payment::Trait as TransactionPaymentTrait;
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure, fail,
     weights::{
@@ -61,7 +62,7 @@ impl<T: Trait> PaysFee<(&Box<<T as Trait>::Call>,)> for CalculateProxyWeight<T> 
 }
 
 type BalanceOf<T> =
-    <<T as transaction_payment::Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+    <<T as TransactionPaymentTrait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
 
 // TODO define session key permissions
 
@@ -88,7 +89,7 @@ pub struct SessionKey<T: Trait> {
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
     + pallet_utils::Trait
-    + transaction_payment::Trait
+    + pallet_transaction_payment::Trait
 {
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -276,7 +277,7 @@ decl_module! {
                     ensure!(can_spend >= spent_on_call, Error::<T>::SessionKeyLimitReached);
                 }
 
-                <T as transaction_payment::Trait>::Currency::transfer(&real, &key, spent_on_call, ExistenceRequirement::KeepAlive)?;
+                <T as TransactionPaymentTrait>::Currency::transfer(&real, &key, spent_on_call, ExistenceRequirement::KeepAlive)?;
 
                 // TODO: what if balance left is less than fees on the next call?
 
@@ -360,18 +361,18 @@ impl<T: Trait> Module<T> {
         owner: &T::AccountId,
         amount: Option<BalanceOf<T>>
     ) -> DispatchResult {
-        <T as transaction_payment::Trait>::Currency::transfer(
+        <T as TransactionPaymentTrait>::Currency::transfer(
             key_account,
             owner,
             amount.unwrap_or_else(||
-                <T as transaction_payment::Trait>::Currency::free_balance(key_account)
+                <T as TransactionPaymentTrait>::Currency::free_balance(key_account)
             ),
             ExistenceRequirement::AllowDeath
         )
     }
 
     fn keep_session_alive(source: &T::AccountId, key_account: &T::AccountId) -> DispatchResult {
-        <T as transaction_payment::Trait>::Currency::transfer(
+        <T as TransactionPaymentTrait>::Currency::transfer(
             source,
             key_account,
             T::BaseSessionKeyBond::get(),

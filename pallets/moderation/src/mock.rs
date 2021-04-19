@@ -12,9 +12,9 @@ use sp_runtime::{
 use frame_system as system;
 use sp_io::TestExternalities;
 
-use pallet_utils::{Content, SpaceId};
-use pallet_spaces::{RESERVED_SPACE_COUNT, SpaceById};
-use pallet_posts::{PostId, PostExtension};
+use pallet_utils::{Content, SpaceId, PostId};
+use pallet_spaces::{RESERVED_SPACE_COUNT, Space, SpaceById};
+use pallet_posts::{Post, PostById, PostExtension};
 
 impl_outer_origin! {
     pub enum Origin for Test {}
@@ -51,10 +51,11 @@ impl system::Trait for Test {
     type MaximumBlockLength = MaximumBlockLength;
     type AvailableBlockRatio = AvailableBlockRatio;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
+    type SystemWeightInfo = ();
 }
 
 parameter_types! {
@@ -65,6 +66,7 @@ impl pallet_timestamp::Trait for Test {
     type Moment = u64;
     type OnTimestampSet = ();
     type MinimumPeriod = MinimumPeriod;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -81,6 +83,7 @@ impl pallet_utils::Trait for Test {
 
 parameter_types! {
     pub const ExistentialDeposit: u64 = 1;
+    pub const MaxLocks: u32 = 50;
 }
 
 impl pallet_balances::Trait for Test {
@@ -89,12 +92,18 @@ impl pallet_balances::Trait for Test {
     type Event = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
+    type WeightInfo = ();
+    type MaxLocks = MaxLocks;
 }
 
 use pallet_permissions::default_permissions::DefaultSpacePermissions;
 
 impl pallet_permissions::Trait for Test {
     type DefaultSpacePermissions = DefaultSpacePermissions;
+}
+
+parameter_types! {
+    pub const DefaultRPCLimit: u64 = 20;
 }
 
 impl pallet_spaces::Trait for Test {
@@ -107,6 +116,7 @@ impl pallet_spaces::Trait for Test {
     type IsAccountBlocked = Moderation;
     type IsContentBlocked = Moderation;
     type HandleDeposit = ();
+    type DefaultRPCLimit = DefaultRPCLimit;
 }
 
 impl pallet_space_follows::Trait for Test {

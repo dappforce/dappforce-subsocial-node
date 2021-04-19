@@ -1,7 +1,11 @@
 use crate::*;
 
 use sp_runtime::traits::Saturating;
-use frame_support::dispatch::DispatchError;
+use pallet_sudo::Module as Sudo;
+use frame_support::{
+    dispatch::DispatchError,
+    traits::schedule::DispatchTime,
+};
 
 use pallet_permissions::SpacePermission;
 use pallet_spaces::Space;
@@ -45,9 +49,10 @@ impl<T: Trait> Module<T> {
 
         T::Scheduler::schedule_named(
             task_name,
-            when,
+            DispatchTime::At(when),
             Some((period_in_blocks, 12)),
             1,
+            frame_system::RawOrigin::Signed(Sudo::<T>::key()).into(),
             Call::process_subscription_payment(subscription_id).into()
         ).map_err(|_| Error::<T>::CannotScheduleReccurentPayment)?;
         Ok(())
@@ -63,7 +68,7 @@ impl<T: Trait> Module<T> {
         let space_id = Self::require_plan(subscription.plan_id)?.space_id;
         let subscription_id = subscription.id;
 
-        Self::cancel_recurring_payment(subscription_id);
+        Self::cancel_recurring_subscription_payment(subscription_id);
         subscription.is_active = false;
 
         SubscriptionById::<T>::insert(subscription_id, subscription);

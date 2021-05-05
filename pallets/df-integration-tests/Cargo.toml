@@ -43,6 +43,7 @@ sp-io = { default-features = false, version = '2.0.1' }
 
 [dev-dependencies]
 # Local dependencies
+pallet-faucets = { default-features = false, path = '../faucets' }
 pallet-moderation = { default-features = false, path = '../moderation' }
 pallet-permissions = { default-features = false, path = '../permissions' }
 
@@ -66,3 +67,4 @@ pallet-utils = { default-features = false, path = '../utils' }
 
 # Substrate dependencies
 sp-core = { default-features = false, version = '2.0.1' }
+pallet-membership = { default-features = false, version = '2.0.1' }

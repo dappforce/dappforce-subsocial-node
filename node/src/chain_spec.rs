@@ -220,6 +220,7 @@ fn testnet_genesis(
 		pallet_spaces: Some(SpacesConfig {
 			endowed_account: root_key,
 		}),
+        pallet_membership_Instance1: Some(Default::default()),
 	}
 }
 

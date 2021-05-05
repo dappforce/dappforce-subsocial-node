@@ -2,7 +2,7 @@
 mod tests {
     use frame_support::{
         assert_ok, assert_noop,
-        impl_outer_origin, parameter_types,
+        impl_outer_origin, parameter_types, ord_parameter_types,
         weights::Weight,
         dispatch::DispatchResult,
         storage::StorageMap,
@@ -15,7 +15,7 @@ mod tests {
         Perbill,
         Storage,
     };
-    use frame_system::{self as system};
+    use frame_system::{self as system, EnsureSignedBy};
 
     use pallet_permissions::{
         SpacePermission,
@@ -23,7 +23,6 @@ mod tests {
         SpacePermissions,
     };
     use pallet_posts::{PostId, Post, PostUpdate, PostExtension, Comment, Error as PostsError};
-    use pallet_profiles::{ProfileUpdate, Error as ProfilesError};
     use pallet_profile_follows::Error as ProfileFollowsError;
     use pallet_reactions::{ReactionId, ReactionKind, PostReactionScores, Error as ReactionsError};
     use pallet_scores::ScoringAction;
@@ -36,6 +35,10 @@ mod tests {
         Error as UtilsError, Module as Utils,
         SpaceId, User, Content,
     };
+
+    mod faucets;
+    use faucets::*;
+    mod profiles;
 
     impl_outer_origin! {
         pub enum Origin for TestRuntime {}
@@ -77,6 +80,10 @@ mod tests {
         type OnNewAccount = ();
         type OnKilledAccount = ();
         type SystemWeightInfo = ();
+    }
+    const SUDO_ACCOUNT: AccountId = 100;
+    ord_parameter_types! {
+        pub const SudoAccount: AccountId = SUDO_ACCOUNT;
     }
 
     parameter_types! {
@@ -144,13 +151,6 @@ mod tests {
         type Event = ();
         type BeforeAccountFollowed = Scores;
         type BeforeAccountUnfollowed = Scores;
-    }
-
-    parameter_types! {}
-
-    impl pallet_profiles::Trait for TestRuntime {
-        type Event = ();
-        type AfterProfileUpdated = ProfileHistory;
     }
 
     parameter_types! {}
@@ -251,8 +251,20 @@ mod tests {
         type DefaultAutoblockThreshold = DefaultAutoblockThreshold;
     }
 
+    impl pallet_membership::Trait for TestRuntime {
+        type Event = ();
+        type AddOrigin = EnsureSignedBy<SudoAccount, AccountId>;
+        type RemoveOrigin = EnsureSignedBy<SudoAccount, AccountId>;
+        type SwapOrigin = EnsureSignedBy<SudoAccount, AccountId>;
+        type ResetOrigin = EnsureSignedBy<SudoAccount, AccountId>;
+        type PrimeOrigin = EnsureSignedBy<SudoAccount, AccountId>;
+        type MembershipInitialized = ();
+        type MembershipChanged = ();
+    }
+
     type System = system::Module<TestRuntime>;
     type Balances = pallet_balances::Module<TestRuntime>;
+    type OffchainMembership = pallet_membership::Module<TestRuntime>;
 
     type Posts = pallet_posts::Module<TestRuntime>;
     type PostHistory = pallet_post_history::Module<TestRuntime>;
@@ -267,9 +279,11 @@ mod tests {
     type SpaceOwnership = pallet_space_ownership::Module<TestRuntime>;
     type Spaces = pallet_spaces::Module<TestRuntime>;
     type Moderation = pallet_moderation::Module<TestRuntime>;
+    type Faucets = pallet_faucets::Module<TestRuntime>;
 
-    pub type AccountId = u64;
-    type BlockNumber = u64;
+    pub(crate) type AccountId = u64;
+    pub(crate) type BlockNumber = u64;
+    pub(crate) type Balance = u64;
 
 
     pub struct ExtBuilder;
@@ -277,14 +291,21 @@ mod tests {
     // TODO: make created space/post/comment configurable or by default
     impl ExtBuilder {
         fn configure_storages(storage: &mut Storage) {
+            let mut balances = Vec::new();
             let mut accounts = Vec::new();
             for account in ACCOUNT1..=ACCOUNT3 {
-                accounts.push(account);
+                accounts.push((account, 100));
             }
 
-            let _ = pallet_balances::GenesisConfig::<TestRuntime> {
-                balances: accounts.iter().cloned().map(|k|(k, 100)).collect()
-            }.assimilate_storage(storage);
+            let mut faucet_accounts = Vec::new();
+            for faucet_account in FAUCET1..=FAUCET8 {
+                faucet_accounts.push((faucet_account, FAUCET_INITIAL_BALANCE));
+            }
+
+            balances.append(&mut accounts);
+            balances.append(&mut faucet_accounts);
+
+            let _ = pallet_balances::GenesisConfig::<TestRuntime> { balances }.assimilate_storage(storage);
         }
 
         /// Default ext configuration with BlockNumber 1
@@ -405,6 +426,8 @@ mod tests {
     const ACCOUNT1: AccountId = 1;
     const ACCOUNT2: AccountId = 2;
     const ACCOUNT3: AccountId = 3;
+    const ACCOUNT4: AccountId = 4;
+    const ACCOUNT5: AccountId = 5;
 
     const SPACE1: SpaceId = 1001;
     const SPACE2: SpaceId = 1002;
@@ -786,32 +809,6 @@ mod tests {
         reaction_id: ReactionId,
     ) -> DispatchResult {
         _delete_post_reaction(origin, Some(post_id.unwrap_or(2)), reaction_id)
-    }
-
-    fn _create_default_profile() -> DispatchResult {
-        _create_profile(None, None)
-    }
-
-    fn _create_profile(
-        origin: Option<Origin>,
-        content: Option<Content>
-    ) -> DispatchResult {
-        Profiles::create_profile(
-            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
-            content.unwrap_or_else(profile_content_ipfs),
-        )
-    }
-
-    fn _update_profile(
-        origin: Option<Origin>,
-        content: Option<Content>
-    ) -> DispatchResult {
-        Profiles::update_profile(
-            origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
-            ProfileUpdate {
-                content,
-            },
-        )
     }
 
     fn _default_follow_account() -> DispatchResult {
@@ -3107,106 +3104,6 @@ mod tests {
                 Some(extension_shared_post(POST1)),
                 None
             ), PostsError::<TestRuntime>::NoPermissionToCreatePosts);
-        });
-    }
-
-// Profiles tests
-
-    #[test]
-    fn create_profile_should_work() {
-        ExtBuilder::build().execute_with(|| {
-            assert_ok!(_create_default_profile()); // AccountId 1
-
-            let profile = Profiles::social_account_by_id(ACCOUNT1).unwrap().profile.unwrap();
-            assert_eq!(profile.created.account, ACCOUNT1);
-            assert!(profile.updated.is_none());
-            assert_eq!(profile.content, profile_content_ipfs());
-
-            assert!(ProfileHistory::edit_history(ACCOUNT1).is_empty());
-        });
-    }
-
-    #[test]
-    fn create_profile_should_fail_when_profile_is_already_created() {
-        ExtBuilder::build().execute_with(|| {
-            assert_ok!(_create_default_profile());
-            // AccountId 1
-            assert_noop!(_create_default_profile(), ProfilesError::<TestRuntime>::ProfileAlreadyCreated);
-        });
-    }
-
-    #[test]
-    fn create_profile_should_fail_when_ipfs_cid_is_invalid() {
-        ExtBuilder::build().execute_with(|| {
-            assert_noop!(_create_profile(
-                None,
-                Some(invalid_content_ipfs())
-            ), UtilsError::<TestRuntime>::InvalidIpfsCid);
-        });
-    }
-
-    #[test]
-    fn update_profile_should_work() {
-        ExtBuilder::build().execute_with(|| {
-            assert_ok!(_create_default_profile());
-            // AccountId 1
-            assert_ok!(_update_profile(
-                None,
-                Some(space_content_ipfs())
-            ));
-
-            // Check whether profile updated correctly
-            let profile = Profiles::social_account_by_id(ACCOUNT1).unwrap().profile.unwrap();
-            assert!(profile.updated.is_some());
-            assert_eq!(profile.content, space_content_ipfs());
-
-            // Check whether profile history is written correctly
-            let profile_history = ProfileHistory::edit_history(ACCOUNT1)[0].clone();
-            assert_eq!(profile_history.old_data.content, Some(profile_content_ipfs()));
-        });
-    }
-
-    #[test]
-    fn update_profile_should_fail_when_social_account_not_found() {
-        ExtBuilder::build().execute_with(|| {
-            assert_noop!(_update_profile(
-                None,
-                Some(profile_content_ipfs())
-            ), ProfilesError::<TestRuntime>::SocialAccountNotFound);
-        });
-    }
-
-    #[test]
-    fn update_profile_should_fail_when_account_has_no_profile() {
-        ExtBuilder::build().execute_with(|| {
-            assert_ok!(ProfileFollows::follow_account(Origin::signed(ACCOUNT1), ACCOUNT2));
-            assert_noop!(_update_profile(
-                None,
-                Some(profile_content_ipfs())
-            ), ProfilesError::<TestRuntime>::AccountHasNoProfile);
-        });
-    }
-
-    #[test]
-    fn update_profile_should_fail_when_no_updates_for_profile_provided() {
-        ExtBuilder::build().execute_with(|| {
-            assert_ok!(_create_default_profile());
-            // AccountId 1
-            assert_noop!(_update_profile(
-                None,
-                None
-            ), ProfilesError::<TestRuntime>::NoUpdatesForProfile);
-        });
-    }
-
-    #[test]
-    fn update_profile_should_fail_when_ipfs_cid_is_invalid() {
-        ExtBuilder::build().execute_with(|| {
-            assert_ok!(_create_default_profile());
-            assert_noop!(_update_profile(
-                None,
-                Some(invalid_content_ipfs())
-            ), UtilsError::<TestRuntime>::InvalidIpfsCid);
         });
     }
 

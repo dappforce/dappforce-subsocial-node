@@ -170,7 +170,7 @@ impl<T: Trait> Module<T> {
     ) -> DispatchResult {
         ensure!(post.is_root_post(), Error::<T>::NotRootPost);
 
-        let social_account = Profiles::get_or_new_social_account(account.clone());
+        let social_account = Profiles::get_or_new_social_account(account.clone(), None, None);
 
         // TODO inspect: this insert could be redundant if the account already exists.
         <SocialAccountById<T>>::insert(account.clone(), social_account.clone());
@@ -232,7 +232,7 @@ impl<T: Trait> Module<T> {
     ) -> DispatchResult {
         ensure!(comment.is_comment(), Error::<T>::NotComment);
 
-        let social_account = Profiles::get_or_new_social_account(account.clone());
+        let social_account = Profiles::get_or_new_social_account(account.clone(), None, None);
 
         // TODO inspect: this insert could be redundant if the account already exists.
         <SocialAccountById<T>>::insert(account.clone(), social_account.clone());
@@ -294,7 +294,7 @@ impl<T: Trait> Module<T> {
         // TODO return Ok(()) if score_diff == 0?
 
         // TODO seems like we can pass a &mut social account as an arg to this func
-        let mut social_account = Profiles::get_or_new_social_account(account.clone());
+        let mut social_account = Profiles::get_or_new_social_account(account.clone(), None, None);
 
         if social_account.reputation as i64 + score_diff as i64 <= 1 {
             social_account.reputation = 1;

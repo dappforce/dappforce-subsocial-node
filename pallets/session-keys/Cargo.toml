@@ -37,6 +37,7 @@ version = '1.3.4'
 serde = { features = ['derive'], optional = true, version = '1.0.119' }
 
 # Local dependencies
+pallet-faucets = { default-features = false, path = '../faucets' }
 pallet-profile-follows = { default-features = false, path = '../profile-follows' }
 pallet-utils = { default-features = false, path = '../utils' }
 

@@ -23,6 +23,7 @@ std = [
     'frame-system/std',
     'pallet-timestamp/std',
     'pallet-balances/std',
+    'df-traits/std',
     'pallet-utils/std',
 ]
 
@@ -43,6 +44,7 @@ sp-runtime = { default-features = false, version = '2.0.1' }
 sp-std = { default-features = false, version = '2.0.1' }
 
 # Local dependencies
+df-traits = { default-features = false, path = '../traits' }
 pallet-utils = { default-features = false, path = '../utils' }
 
 [dev-dependencies]

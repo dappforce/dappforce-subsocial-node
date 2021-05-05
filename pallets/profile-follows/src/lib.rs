@@ -83,8 +83,8 @@ decl_module! {
       ensure!(!<AccountFollowedByAccount<T>>::contains_key((follower.clone(), account.clone())),
         Error::<T>::AlreadyAccountFollower);
 
-      let mut follower_account = Profiles::get_or_new_social_account(follower.clone());
-      let mut followed_account = Profiles::get_or_new_social_account(account.clone());
+      let mut follower_account = Profiles::get_or_new_social_account(follower.clone(), None, None);
+      let mut followed_account = Profiles::get_or_new_social_account(account.clone(), None, None);
 
       follower_account.inc_following_accounts();
       followed_account.inc_followers();

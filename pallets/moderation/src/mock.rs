@@ -115,6 +115,8 @@ impl pallet_spaces::Trait for Test {
     type HandleDeposit = ();
 }
 
+
+
 impl pallet_space_follows::Trait for Test {
     type Event = ();
     type BeforeSpaceFollowed = ();
@@ -149,6 +151,10 @@ impl pallet_roles::Trait for Test {
 impl pallet_profiles::Trait for Test {
     type Event = ();
     type AfterProfileUpdated = ();
+    type MaxCreationsPerPeriod = ();
+    type BlocksInPeriod = ();
+    type FaucetsProvider = ();
+    type AddSocialAccountMembers = ();
 }
 
 parameter_types! {

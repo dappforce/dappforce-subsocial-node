@@ -26,11 +26,7 @@ use sp_std::{
     prelude::*,
 };
 
-#[cfg(test)]
-mod mock;
-
-#[cfg(test)]
-mod tests;
+use df_traits::FaucetsProvider;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
 pub struct Faucet<T: Trait> {
@@ -54,15 +50,14 @@ pub struct FaucetUpdate<BlockNumber, Balance> {
     pub drip_limit: Option<Balance>,
 }
 
-type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+type BalanceOf<T> = <<T as pallet_utils::Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait {
-
+pub trait Trait: system::Trait
+    + pallet_utils::Trait
+{
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-
-    type Currency: Currency<Self::AccountId>;
 }
 
 decl_storage! {
@@ -255,45 +250,7 @@ decl_module! {
         ) -> DispatchResult {
             let faucet = ensure_signed(origin)?;
 
-            // Validate input values
-            ensure!(faucet != recipient, Error::<T>::RecipientEqualsFaucet);
-            ensure!(amount > Zero::zero(), Error::<T>::ZeroDripAmountProvided);
-
-            let mut settings = Self::require_faucet(&faucet)?;
-            ensure!(settings.enabled, Error::<T>::FaucetDisabled);
-            ensure!(amount <= settings.drip_limit, Error::<T>::DripLimitReached);
-
-            let faucet_balance = T::Currency::free_balance(&faucet);
-            ensure!(amount <= faucet_balance, Error::<T>::NotEnoughFreeBalanceOnFaucet);
-
-            let current_block = <system::Module<T>>::block_number();
-
-            if settings.next_period_at <= current_block {
-                // Move to the next period and reset the period stats
-                settings.next_period_at = current_block.saturating_add(settings.period);
-                settings.dripped_in_current_period = Zero::zero();
-            }
-
-            // Calculate have many tokens still can be dripped in the current period
-            let tokens_left_in_current_period = settings.period_limit
-                .saturating_sub(settings.dripped_in_current_period);
-
-            ensure!(amount <= tokens_left_in_current_period, Error::<T>::PeriodLimitReached);
-
-            T::Currency::transfer(
-                &faucet,
-                &recipient,
-                amount,
-                ExistenceRequirement::KeepAlive
-            )?;
-
-            settings.dripped_in_current_period = amount
-                .saturating_add(settings.dripped_in_current_period);
-
-            FaucetByAccount::<T>::insert(&faucet, settings);
-
-            Self::deposit_event(RawEvent::Dripped(faucet, recipient, amount));
-            Ok(())
+            Self::do_drip(faucet, recipient, amount)
         }
     }
 }
@@ -318,6 +275,47 @@ impl<T: Trait> Module<T> {
         ensure!(drip_limit > Zero::zero(), Error::<T>::ZeroDripLimitProvided);
         Ok(())
     }
+
+    pub fn do_drip(faucet: T::AccountId, recipient: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+        ensure!(faucet != recipient, Error::<T>::RecipientEqualsFaucet);
+        ensure!(amount > Zero::zero(), Error::<T>::ZeroDripAmountProvided);
+
+        let mut settings = Self::require_faucet(&faucet)?;
+        ensure!(settings.enabled, Error::<T>::FaucetDisabled);
+        ensure!(amount <= settings.drip_limit, Error::<T>::DripLimitReached);
+
+        let faucet_balance = T::Currency::free_balance(&faucet);
+        ensure!(amount <= faucet_balance, Error::<T>::NotEnoughFreeBalanceOnFaucet);
+
+        let current_block = <system::Module<T>>::block_number();
+
+        if settings.next_period_at <= current_block {
+            // Move to the next period and reset the period stats
+            settings.next_period_at = current_block.saturating_add(settings.period);
+            settings.dripped_in_current_period = Zero::zero();
+        }
+
+        // Calculate have many tokens still can be dripped in the current period
+        let tokens_left_in_current_period = settings.period_limit
+          .saturating_sub(settings.dripped_in_current_period);
+
+        ensure!(amount <= tokens_left_in_current_period, Error::<T>::PeriodLimitReached);
+
+        T::Currency::transfer(
+            &faucet,
+            &recipient,
+            amount,
+            ExistenceRequirement::KeepAlive
+        )?;
+
+        settings.dripped_in_current_period = amount
+          .saturating_add(settings.dripped_in_current_period);
+
+        FaucetByAccount::<T>::insert(&faucet, settings);
+
+        Self::deposit_event(RawEvent::Dripped(faucet, recipient, amount));
+        Ok(())
+    }
 }
 
 impl<T: Trait> Faucet<T> {
@@ -336,5 +334,11 @@ impl<T: Trait> Faucet<T> {
             next_period_at: Zero::zero(),
             dripped_in_current_period: Zero::zero(),
         }
+    }
+}
+
+impl<T: Trait> FaucetsProvider<T::AccountId, BalanceOf<T>> for Module<T> {
+    fn do_drip(faucet: T::AccountId, recipient: T::AccountId, amount: BalanceOf<T>) -> DispatchResult {
+        Self::do_drip(faucet, recipient, amount)
     }
 }

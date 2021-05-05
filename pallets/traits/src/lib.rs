@@ -54,3 +54,13 @@ pub trait PermissionChecker {
     )
   }
 }
+
+pub trait FaucetsProvider<AccountId, Balance> {
+  fn do_drip(faucet: AccountId, recipient: AccountId, amount: Balance) -> DispatchResult;
+}
+
+impl<AccountId, Balance> FaucetsProvider<AccountId, Balance> for () {
+  fn do_drip(_faucet: AccountId, _recipient: AccountId, _amount: Balance) -> DispatchResult {
+    Ok(())
+  }
+}

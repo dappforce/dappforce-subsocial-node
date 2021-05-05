@@ -4,7 +4,9 @@
     "following_accounts_count": "u16",
     "following_spaces_count": "u16",
     "reputation": "u32",
-    "profile": "Option<Profile>"
+    "profile": "Option<Profile>",
+    "created_at": "Option<BlockNumber>",
+    "referrer": "Option<AccountId>"
   },
 
   "Profile": {

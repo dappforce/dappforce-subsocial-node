@@ -107,7 +107,7 @@ impl<T: Trait> Module<T> {
     fn add_space_follower(follower: T::AccountId, space: &mut Space<T>) -> DispatchResult {
         space.inc_followers();
 
-        let mut social_account = Profiles::get_or_new_social_account(follower.clone());
+        let mut social_account = Profiles::get_or_new_social_account(follower.clone(), None, None);
         social_account.inc_following_spaces();
 
         T::BeforeSpaceFollowed::before_space_followed(

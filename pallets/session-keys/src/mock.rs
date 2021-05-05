@@ -121,9 +121,19 @@ impl pallet_profile_follows::Trait for Test {
 
 parameter_types! {}
 
+impl pallet_faucets::Trait for Test {
+    type Event = ();
+}
+
+parameter_types! {}
+
 impl pallet_profiles::Trait for Test {
     type Event = ();
     type AfterProfileUpdated = ();
+    type MaxCreationsPerPeriod = ();
+    type BlocksInPeriod = ();
+    type FaucetsProvider = ();
+    type AddSocialAccountMembers = ();
 }
 
 // TODO export to a common place

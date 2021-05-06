@@ -190,12 +190,13 @@ fn proxy_should_fail_with_session_key_expired() {
 #[test]
 fn proxy_should_fail_with_session_key_limit_reached() {
     ExtBuilder::build_with_balance().execute_with(|| {
+        let fees_expected: Balance = SessionKeys::get_extrinsic_fees(Box::new(follow_account_proxy_call()));
         assert_ok!(
             _add_key(
                 None,
                 None,
                 None,
-                Some(Some(2 * MILLICENTS))
+                Some(Some(fees_expected))
             )
         );
         assert_ok!(_default_proxy());

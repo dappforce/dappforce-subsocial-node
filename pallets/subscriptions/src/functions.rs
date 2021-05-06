@@ -1,12 +1,16 @@
 use crate::*;
 
 use sp_runtime::traits::Saturating;
-use frame_support::dispatch::DispatchError;
+use pallet_sudo::Module as Sudo;
+use frame_support::{
+    dispatch::DispatchError,
+    traits::schedule::DispatchTime,
+};
 
 use pallet_permissions::SpacePermission;
 use pallet_spaces::Space;
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
     pub fn require_plan(plan_id: SubscriptionPlanId) -> Result<SubscriptionPlan<T>, DispatchError> {
         Ok(Self::plan_by_id(plan_id).ok_or(Error::<T>::SubscriptionPlanNotFound)?)
     }
@@ -45,9 +49,10 @@ impl<T: Trait> Module<T> {
 
         T::Scheduler::schedule_named(
             task_name,
-            when,
+            DispatchTime::At(when),
             Some((period_in_blocks, 12)),
             1,
+            frame_system::RawOrigin::Signed(Sudo::<T>::key()).into(),
             Call::process_subscription_payment(subscription_id).into()
         ).map_err(|_| Error::<T>::CannotScheduleReccurentPayment)?;
         Ok(())
@@ -63,12 +68,12 @@ impl<T: Trait> Module<T> {
         let space_id = Self::require_plan(subscription.plan_id)?.space_id;
         let subscription_id = subscription.id;
 
-        Self::cancel_recurring_payment(subscription_id);
+        Self::cancel_recurring_subscription_payment(subscription_id);
         subscription.is_active = false;
 
         SubscriptionById::<T>::insert(subscription_id, subscription);
-        SubscriptionIdsByPatron::<T>::mutate(who, |ids| vec_remove_on(ids, subscription_id));
-        SubscriptionIdsBySpace::mutate(space_id, |ids| vec_remove_on(ids, subscription_id));
+        SubscriptionIdsByPatron::<T>::mutate(who, |ids| remove_from_vec(ids, subscription_id));
+        SubscriptionIdsBySpace::mutate(space_id, |ids| remove_from_vec(ids, subscription_id));
 
         Ok(())
     }
@@ -84,7 +89,7 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> SubscriptionPlan<T> {
+impl<T: Config> SubscriptionPlan<T> {
     pub fn new(
         id: SubscriptionPlanId,
         created_by: T::AccountId,
@@ -116,7 +121,7 @@ impl<T: Trait> SubscriptionPlan<T> {
     }
 }
 
-impl<T: Trait> Subscription<T> {
+impl<T: Config> Subscription<T> {
     pub fn new(
         id: SubscriptionId,
         created_by: T::AccountId,

@@ -1,4 +1,4 @@
-use crate::{Module, Trait};
+use crate::{Module, Config};
 
 use sp_io::TestExternalities;
 use sp_core::H256;
@@ -15,7 +15,7 @@ use frame_support::{
 
 use pallet_profile_follows::Call as ProfileFollowsCall;
 use frame_support::traits::Currency;
-pub use transaction_payment::{Multiplier, TargetedFeeAdjustment};
+pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 
 // TODO: replace with imported constants from Runtime
 pub const SMNS: Balance = 1_000_000_000_000;
@@ -45,7 +45,7 @@ parameter_types! {
 	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
-impl system::Trait for Test {
+impl system::Config for Test {
     type BaseCallFilter = ();
     type Origin = Origin;
     type Call = Call;
@@ -66,33 +66,37 @@ impl system::Trait for Test {
     type MaximumBlockLength = MaximumBlockLength;
     type AvailableBlockRatio = AvailableBlockRatio;
     type Version = ();
-    type ModuleToIndex = ();
+    type PalletInfo = ();
     type AccountData = pallet_balances::AccountData<u64>;
     type OnNewAccount = ();
     type OnKilledAccount = ();
+    type SystemWeightInfo = ();
 }
 
 pub(crate) const EXISTENTIAL_DEPOSIT: Balance = 1 * CENTS;
 parameter_types! {
-        pub const ExistentialDeposit: u64 = EXISTENTIAL_DEPOSIT;
-    }
+    pub const ExistentialDeposit: u64 = EXISTENTIAL_DEPOSIT;
+}
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
     type Balance = u64;
     type DustRemoval = ();
     type Event = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
+    type WeightInfo = ();
+    type MaxLocks = ();
 }
 
 parameter_types! {
-  pub const MinimumPeriod: u64 = 5;
+    pub const MinimumPeriod: u64 = 5;
 }
 
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
     type Moment = u64;
     type OnTimestampSet = ();
     type MinimumPeriod = MinimumPeriod;
+    type WeightInfo = ();
 }
 
 // TODO export to a common place
@@ -102,14 +106,14 @@ parameter_types! {
   pub const MaxHandleLen: u32 = 50;
 }
 
-impl pallet_utils::Trait for Test {
+impl pallet_utils::Config for Test {
     type Event = ();
     type Currency = Balances;
     type MinHandleLen = MinHandleLen;
     type MaxHandleLen = MaxHandleLen;
 }
 
-impl pallet_profile_follows::Trait for Test {
+impl pallet_profile_follows::Config for Test {
     type Event = ();
     type BeforeAccountFollowed = ();
     type BeforeAccountUnfollowed = ();
@@ -117,7 +121,7 @@ impl pallet_profile_follows::Trait for Test {
 
 parameter_types! {}
 
-impl pallet_profiles::Trait for Test {
+impl pallet_profiles::Config for Test {
     type Event = ();
     type AfterProfileUpdated = ();
 }
@@ -130,7 +134,7 @@ parameter_types! {
 	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 1_000_000_000u128);
 }
 
-impl transaction_payment::Trait for Test {
+impl pallet_transaction_payment::Config for Test {
     type Currency = Balances;
     type OnTransactionPayment = ();
     type TransactionByteFee = TransactionByteFee;
@@ -144,7 +148,7 @@ parameter_types! {
     pub const BaseSessionKeyBond: Balance = DEFAULT_SESSION_KEY_BALANCE;
 }
 
-impl Trait for Test {
+impl Config for Test {
     type Event = ();
     type Call = Call;
     type MaxSessionKeysPerAccount = MaxSessionKeysPerAccount;
@@ -199,7 +203,7 @@ pub(crate) const ACCOUNT4: AccountId = 4;
 pub(crate) const DEFAULT_SESSION_KEY_BALANCE: Balance = 1 * DOLLARS;
 pub(crate) const BLOCKS_TO_LIVE: BlockNumber = 20;
 
-pub(crate) fn follow_account_proxy_call() -> Call {
+pub(crate) const fn follow_account_proxy_call() -> Call {
     Call::ProfileFollows(ProfileFollowsCall::follow_account(ACCOUNT_PROXY))
 }
 

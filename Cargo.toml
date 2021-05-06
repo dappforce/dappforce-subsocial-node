@@ -5,7 +5,8 @@ panic = 'unwind'
 members = [
     'node',
     'runtime',
-    'pallets/df-integration-tests',
-    'pallets/moderation',
+    'pallets/*',
+]
+exclude = [
     'pallets/session-keys',
 ]

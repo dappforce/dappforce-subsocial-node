@@ -11,19 +11,19 @@ use frame_system::{self as system, ensure_signed};
 
 use df_traits::moderation::IsAccountBlocked;
 use pallet_spaces::{Module as Spaces, SpaceById, SpaceIdsByOwner};
-use pallet_utils::{Error as UtilsError, SpaceId, vec_remove_on};
+use pallet_utils::{Error as UtilsError, SpaceId, remove_from_vec};
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait
-    + pallet_utils::Trait
-    + pallet_spaces::Trait
+pub trait Config: system::Config
+    + pallet_utils::Config
+    + pallet_spaces::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 }
 
 decl_error! {
-  pub enum Error for Module<T: Trait> {
+  pub enum Error for Module<T: Config> {
     /// The current space owner cannot transfer ownership to themself.
     CannotTranferToCurrentOwner,
     /// Account is already an owner of a space.
@@ -39,7 +39,7 @@ decl_error! {
 
 // This pallet's storage items.
 decl_storage! {
-    trait Store for Module<T: Trait> as SpaceOwnershipModule {
+    trait Store for Module<T: Config> as SpaceOwnershipModule {
         pub PendingSpaceOwner get(fn pending_space_owner):
             map hasher(twox_64_concat) SpaceId => Option<T::AccountId>;
     }
@@ -47,7 +47,7 @@ decl_storage! {
 
 decl_event!(
     pub enum Event<T> where
-        <T as system::Trait>::AccountId,
+        <T as system::Config>::AccountId,
     {
         SpaceOwnershipTransferCreated(/* current owner */ AccountId, SpaceId, /* new owner */ AccountId),
         SpaceOwnershipTransferAccepted(AccountId, SpaceId),
@@ -57,7 +57,7 @@ decl_event!(
 
 // The pallet's dispatchable functions.
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
     // Initializing errors
     type Error = Error<T>;
@@ -73,7 +73,7 @@ decl_module! {
       space.ensure_space_owner(who.clone())?;
 
       ensure!(who != transfer_to, Error::<T>::CannotTranferToCurrentOwner);
-      ensure!(!T::IsAccountBlocked::is_account_blocked(transfer_to.clone(), space_id), UtilsError::<T>::AccountIsBlocked);
+      ensure!(T::IsAccountBlocked::is_allowed_account(transfer_to.clone(), space_id), UtilsError::<T>::AccountIsBlocked);
 
       <PendingSpaceOwner<T>>::insert(space_id, transfer_to.clone());
 
@@ -101,7 +101,7 @@ decl_module! {
       <SpaceById<T>>::insert(space_id, space);
 
       // Remove space id from the list of spaces by old owner
-      <SpaceIdsByOwner<T>>::mutate(old_owner.clone(), |space_ids| vec_remove_on(space_ids, space_id));
+      <SpaceIdsByOwner<T>>::mutate(old_owner.clone(), |space_ids| remove_from_vec(space_ids, space_id));
 
       // Add space id to the list of spaces by new owner
       <SpaceIdsByOwner<T>>::mutate(new_owner.clone(), |ids| ids.push(space_id));

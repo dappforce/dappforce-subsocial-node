@@ -1,73 +1,85 @@
-use crate::*;
+use super::*;
 
 use sp_core::H256;
 use sp_io::TestExternalities;
-use frame_support::{impl_outer_origin, assert_ok, assert_noop, parameter_types, weights::Weight, dispatch::DispatchResult};
+
 use sp_runtime::{
-  traits::{BlakeTwo256, IdentityLookup}, testing::Header, Perbill,
+  traits::{BlakeTwo256, IdentityLookup}, testing::Header,
 };
+use frame_support::{assert_ok, assert_noop, parameter_types, dispatch::DispatchResult};
+use frame_system as system;
 
-impl_outer_origin! {
-  pub enum Origin for Test {}
-}
+use crate as multiownership;
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+frame_support::construct_runtime!(
+    pub enum Test where
+        Block = Block,
+        NodeBlock = Block,
+        UncheckedExtrinsic = UncheckedExtrinsic,
+    {
+        System: system::{Module, Call, Config, Storage, Event<T>},
+        Balances: pallet_balances::{Module, Call, Storage, Config<T>, Event<T>},
+        Timestamp: pallet_timestamp::{Module, Call, Storage, Inherent},
+        MultiOwnership: multiownership::{Module, Call, Storage, Event<T>},
+        Utils: pallet_utils::{Module, Storage, Event<T>, Config<T>},
+    }
+);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::from_percent(75);
 }
 
-impl system::Trait for Test {
+impl system::Config for Test {
   type BaseCallFilter = ();
+  type BlockWeights = ();
+  type BlockLength = ();
   type Origin = Origin;
-  type Call = ();
+  type Call = Call;
   type Index = u64;
   type BlockNumber = u64;
   type Hash = H256;
   type Hashing = BlakeTwo256;
-  type AccountId = u64;
+  type AccountId = AccountId;
   type Lookup = IdentityLookup<Self::AccountId>;
   type Header = Header;
-  type Event = ();
+  type Event = Event;
   type BlockHashCount = BlockHashCount;
-  type MaximumBlockWeight = MaximumBlockWeight;
   type DbWeight = ();
-  type BlockExecutionWeight = ();
-  type ExtrinsicBaseWeight = ();
-  type MaximumExtrinsicWeight = MaximumBlockWeight;
-  type MaximumBlockLength = MaximumBlockLength;
-  type AvailableBlockRatio = AvailableBlockRatio;
   type Version = ();
-  type ModuleToIndex = ();
+  type PalletInfo = PalletInfo;
   type AccountData = pallet_balances::AccountData<u64>;
   type OnNewAccount = ();
   type OnKilledAccount = ();
+  type SystemWeightInfo = ();
+  type SS58Prefix = ();
 }
 
 parameter_types! {
   pub const MinimumPeriod: u64 = 5;
 }
 
-impl pallet_timestamp::Trait for Test {
+impl pallet_timestamp::Config for Test {
   type Moment = u64;
   type OnTimestampSet = ();
   type MinimumPeriod = MinimumPeriod;
+  type WeightInfo = ();
 }
 
 parameter_types! {
-	pub const ExistentialDeposit: u64 = 1;
+  pub const ExistentialDeposit: u64 = 1;
 }
 
-impl pallet_balances::Trait for Test {
+impl pallet_balances::Config for Test {
   type Balance = u64;
   type DustRemoval = ();
-  type Event = ();
+  type Event = Event;
   type ExistentialDeposit = ExistentialDeposit;
   type AccountStore = System;
+  type WeightInfo = ();
+  type MaxLocks = ();
 }
 
 parameter_types! {
@@ -75,8 +87,8 @@ parameter_types! {
   pub const MaxHandleLen: u32 = 50;
 }
 
-impl pallet_utils::Trait for Test {
-  type Event = ();
+impl pallet_utils::Config for Test {
+  type Event = Event;
   type Currency = Balances;
   type MinHandleLen = MinHandleLen;
   type MaxHandleLen = MaxHandleLen;
@@ -90,18 +102,14 @@ parameter_types! {
 	pub const DeleteExpiredChangesPeriod: u64 = 1800;
 }
 
-impl Trait for Test {
-  type Event = ();
+impl Config for Test {
+  type Event = Event;
   type MinSpaceOwners = MinSpaceOwners;
   type MaxSpaceOwners = MaxSpaceOwners;
   type MaxChangeNotesLength = MaxChangeNotesLength;
   type BlocksToLive = BlocksToLive;
   type DeleteExpiredChangesPeriod = DeleteExpiredChangesPeriod;
 }
-
-type MultiOwnership = Module<Test>;
-type Balances = pallet_balances::Module<Test>;
-type System = system::Module<Test>;
 
 pub struct ExtBuilder;
 
@@ -369,7 +377,7 @@ fn propose_change_should_work() {
     // Check whether data is stored correctly
     let change = MultiOwnership::change_by_id(1).unwrap();
     assert_eq!(change.add_owners, vec![ACCOUNT3]);
-    assert_eq!(change.remove_owners, vec![]);
+    assert!(change.remove_owners.is_empty());
     assert_eq!(change.new_threshold, Some(3));
     assert_eq!(change.notes, self::change_note());
     assert_eq!(change.confirmed_by, vec![ACCOUNT1]);
@@ -608,7 +616,7 @@ fn cancel_proposal_should_work() {
 
     // Check storages
     let set_to_vec: Vec<u64> = MultiOwnership::pending_change_ids().iter().cloned().collect();
-    assert_eq!(set_to_vec, vec![]);
+    assert!(set_to_vec.is_empty());
     assert_eq!(MultiOwnership::pending_change_id_by_space_id(1), None);
     assert_eq!(MultiOwnership::next_change_id(), 2);
     assert!(MultiOwnership::change_by_id(1).is_none());

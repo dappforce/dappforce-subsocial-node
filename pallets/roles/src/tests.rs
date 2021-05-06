@@ -6,7 +6,6 @@ use frame_support::{
 };
 use pallet_utils::{Error as UtilsError};
 
-
 #[test]
 fn create_role_should_work() {
     ExtBuilder::build().execute_with(|| {
@@ -362,7 +361,7 @@ fn grant_role_should_work() {
 
         // Change whether data was stored correctly
         assert_eq!(Roles::users_by_role_id(ROLE1), vec![user.clone()]);
-        assert_eq!(Roles::role_ids_by_user_in_space((user, SPACE1)), vec![ROLE1]);
+        assert_eq!(Roles::role_ids_by_user_in_space(user, SPACE1), vec![ROLE1]);
     });
 }
 
@@ -380,7 +379,7 @@ fn grant_role_should_work_with_a_few_roles() {
 
         // Check whether data is stored correctly
         assert_eq!(Roles::users_by_role_id(ROLE1), vec![User::Account(ACCOUNT2), User::Account(ACCOUNT3)]);
-        assert_eq!(Roles::role_ids_by_user_in_space((user, SPACE1)), vec![ROLE1]);
+        assert_eq!(Roles::role_ids_by_user_in_space(user, SPACE1), vec![ROLE1]);
     });
 }
 
@@ -444,7 +443,7 @@ fn revoke_role_should_work() {
 
         // Change whether data was stored correctly
         assert!(Roles::users_by_role_id(ROLE1).is_empty());
-        assert!(Roles::role_ids_by_user_in_space((user, SPACE1)).is_empty());
+        assert!(Roles::role_ids_by_user_in_space(user, SPACE1).is_empty());
     });
 }
 
@@ -462,7 +461,7 @@ fn revoke_role_should_work_with_a_few_roles() {
 
         // Check whether data is stored correctly
         assert!(Roles::users_by_role_id(ROLE1).is_empty());
-        assert!(Roles::role_ids_by_user_in_space((user, SPACE1)).is_empty());
+        assert!(Roles::role_ids_by_user_in_space(user, SPACE1).is_empty());
     });
 }
 
@@ -521,7 +520,7 @@ fn delete_role_should_work() {
         assert!(Roles::role_by_id(ROLE1).is_none());
         assert!(Roles::users_by_role_id(ROLE1).is_empty());
         assert!(Roles::role_ids_by_space_id(SPACE1).is_empty());
-        assert!(Roles::role_ids_by_user_in_space((User::Account(ACCOUNT2), SPACE1)).is_empty());
+        assert!(Roles::role_ids_by_user_in_space(User::Account(ACCOUNT2), SPACE1).is_empty());
         assert_eq!(Roles::next_role_id(), ROLE2);
     });
 }
@@ -540,7 +539,7 @@ fn delete_role_should_work_with_a_few_roles() {
         assert!(Roles::role_by_id(ROLE1).is_none());
         assert!(Roles::users_by_role_id(ROLE1).is_empty());
         assert_eq!(Roles::role_ids_by_space_id(SPACE1), vec![ROLE2]);
-        assert_eq!(Roles::role_ids_by_user_in_space((User::Account(ACCOUNT2), SPACE1)), vec![ROLE2]);
+        assert_eq!(Roles::role_ids_by_user_in_space(User::Account(ACCOUNT2), SPACE1), vec![ROLE2]);
         assert_eq!(Roles::next_role_id(), ROLE3);
     });
 }

@@ -1,10 +1,10 @@
 use frame_support::dispatch::DispatchResult;
 
-use pallet_utils::{SpaceId, vec_remove_on};
+use pallet_utils::{SpaceId, remove_from_vec};
 
 use super::*;
 
-impl<T: Trait> Post<T> {
+impl<T: Config> Post<T> {
 
     pub fn new(
         id: PostId,
@@ -156,7 +156,7 @@ impl Default for PostUpdate {
     }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
     pub fn ensure_account_can_update_post(
         editor: &T::AccountId, 
@@ -332,7 +332,7 @@ impl<T: Trait> Module<T> {
 
         Self::for_each_post_ancestor(commented_post_id, |post| post.inc_replies())?;
         PostById::insert(root_post.id, root_post);
-        ReplyIdsByPostId::mutate(commented_post_id, |ids| ids.push(new_post_id));
+        ReplyIdsByPostId::mutate(commented_post_id, |reply_ids| reply_ids.push(new_post_id));
 
         Ok(())
     }
@@ -379,11 +379,11 @@ impl<T: Trait> Module<T> {
         post: &mut Post<T>,
         new_space_id: SpaceId
     ) -> DispatchResult {
-        let old_space_id = post.get_space_id()?;
+        let old_space_id_opt = post.try_get_space_id();
         let new_space = Spaces::<T>::require_space(new_space_id)?;
 
         ensure!(
-            !T::IsAccountBlocked::is_account_blocked(editor.clone(), new_space_id),
+            T::IsAccountBlocked::is_allowed_account(editor.clone(), new_space_id),
             UtilsError::<T>::AccountIsBlocked
         );
         Spaces::ensure_account_has_space_permission(
@@ -393,23 +393,34 @@ impl<T: Trait> Module<T> {
             Error::<T>::NoPermissionToCreatePosts.into()
         )?;
         ensure!(
-            !T::IsPostBlocked::is_post_blocked(post.id, new_space_id),
+            T::IsPostBlocked::is_allowed_post(post.id, new_space_id),
             UtilsError::<T>::PostIsBlocked
         );
         ensure!(
-            !T::IsContentBlocked::is_content_blocked(post.content.clone(), new_space_id),
+            T::IsContentBlocked::is_allowed_content(post.content.clone(), new_space_id),
             UtilsError::<T>::ContentIsBlocked
         );
 
         match post.extension {
             PostExtension::RegularPost | PostExtension::SharedPost(_) => {
 
-                // Decrease the number of posts on the old space
-                Self::mutate_posts_count_on_space(
-                    old_space_id,
-                    post,
-                    |counter| *counter = counter.saturating_sub(1)
-                )?;
+                if let Some(old_space_id) = old_space_id_opt {
+                    
+                    // Decrease the number of posts on the old space
+                    Self::mutate_posts_count_on_space(
+                        old_space_id,
+                        post,
+                        |counter| *counter = counter.saturating_sub(1)
+                    )?;
+
+                    // Decrease a score on the old space
+                    Spaces::<T>::mutate_space_by_id(
+                        old_space_id,
+                        |space| space.score = space.score.saturating_sub(post.score)
+                    )?;
+
+                    PostIdsBySpaceId::mutate(old_space_id, |post_ids| remove_from_vec(post_ids, post.id));
+                }
 
                 // Increase the number of posts on the new space
                 Self::mutate_posts_count_on_space(
@@ -418,22 +429,15 @@ impl<T: Trait> Module<T> {
                     |counter| *counter = counter.saturating_add(1)
                 )?;
 
-                // Decrease a score on the old space
-                Spaces::<T>::mutate_space_by_id(
-                    old_space_id,
-                    |space| space.score = space.score.saturating_sub(post.score)
-                )?;
-
                 // Increase a score on the new space
                 Spaces::<T>::mutate_space_by_id(
                     new_space_id,
                     |space| space.score = space.score.saturating_add(post.score)
                 )?;
 
-                post.space_id = Some(new_space_id);
+                PostIdsBySpaceId::mutate(new_space_id, |post_ids| post_ids.push(post.id));
 
-                PostIdsBySpaceId::mutate(old_space_id, |post_ids| vec_remove_on(post_ids, post.id));
-                PostIdsBySpaceId::mutate(new_space_id, |ids| ids.push(post.id));
+                post.space_id = Some(new_space_id);
                 PostById::<T>::insert(post.id, post);
 
                 Ok(())
@@ -486,7 +490,7 @@ impl<T: Trait> Module<T> {
             )?;
 
             post.space_id = None;
-            PostIdsBySpaceId::mutate(space_id, |post_ids| vec_remove_on(post_ids, post_id));
+            PostIdsBySpaceId::mutate(space_id, |post_ids| remove_from_vec(post_ids, post_id));
         }
 
         PostById::<T>::insert(post.id, post);

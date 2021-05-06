@@ -29,7 +29,7 @@ mod tests;
 type RoleId = u64;
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct Role<T: Trait> {
+pub struct Role<T: Config> {
     pub created: WhoAndWhen<T>,
     pub updated: Option<WhoAndWhen<T>>,
     pub id: RoleId,
@@ -48,12 +48,12 @@ pub struct RoleUpdate {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait
-    + pallet_permissions::Trait
-    + pallet_utils::Trait
+pub trait Config: system::Config
+    + pallet_permissions::Config
+    + pallet_utils::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     type MaxUsersToProcessPerDeleteRole: Get<u16>;
 
@@ -61,14 +61,14 @@ pub trait Trait: system::Trait
 
     type SpaceFollows: SpaceFollowsProvider<AccountId=Self::AccountId>;
 
-    type IsAccountBlocked: IsAccountBlocked<AccountId=Self::AccountId>;
+    type IsAccountBlocked: IsAccountBlocked<Self::AccountId>;
 
     type IsContentBlocked: IsContentBlocked;
 }
 
 decl_event!(
     pub enum Event<T> where
-        <T as system::Trait>::AccountId
+        <T as system::Config>::AccountId
     {
         RoleCreated(AccountId, SpaceId, RoleId),
         RoleUpdated(AccountId, RoleId),
@@ -79,7 +79,7 @@ decl_event!(
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Role was not found by id.
         RoleNotFound,
         /// RoleId counter storage overflowed.
@@ -103,7 +103,7 @@ decl_error! {
 
 // This pallet's storage items.
 decl_storage! {
-    trait Store for Module<T: Trait> as PermissionsModule {
+    trait Store for Module<T: Config> as PermissionsModule {
 
         /// The next role id.
         pub NextRoleId get(fn next_role_id): RoleId = 1;
@@ -121,14 +121,16 @@ decl_storage! {
             map hasher(twox_64_concat) SpaceId => Vec<RoleId>;
 
         /// A list of all role ids granted to this user (account or space) within this space.
-        pub RoleIdsByUserInSpace get(fn role_ids_by_user_in_space):
-            map hasher(blake2_128_concat) (User<T::AccountId>, SpaceId) => Vec<RoleId>;
+        pub RoleIdsByUserInSpace get(fn role_ids_by_user_in_space): double_map
+            hasher(blake2_128_concat) User<T::AccountId>,
+            hasher(twox_64_concat) SpaceId
+            => Vec<RoleId>;
     }
 }
 
 // The pallet's dispatchable functions.
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
     const MaxUsersToProcessPerDeleteRole: u16 = T::MaxUsersToProcessPerDeleteRole::get();
 
@@ -155,7 +157,7 @@ decl_module! {
       ensure!(!permissions.is_empty(), Error::<T>::NoPermissionsProvided);
 
       Utils::<T>::is_valid_content(content.clone())?;
-      ensure!(!T::IsContentBlocked::is_content_blocked(content.clone(), space_id), UtilsError::<T>::ContentIsBlocked);
+      ensure!(T::IsContentBlocked::is_allowed_content(content.clone(), space_id), UtilsError::<T>::ContentIsBlocked);
 
       Self::ensure_role_manager(who.clone(), space_id)?;
       
@@ -202,7 +204,7 @@ decl_module! {
       if let Some(content) = update.content {
         if content != role.content {
           Utils::<T>::is_valid_content(content.clone())?;
-          ensure!(!T::IsContentBlocked::is_content_blocked(content.clone(), role.space_id), UtilsError::<T>::ContentIsBlocked);
+          ensure!(T::IsContentBlocked::is_allowed_content(content.clone(), role.space_id), UtilsError::<T>::ContentIsBlocked);
 
           role.content = content;
           is_update_applied = true;
@@ -278,8 +280,8 @@ decl_module! {
         if !Self::users_by_role_id(role_id).contains(&user) {
           <UsersByRoleId<T>>::mutate(role_id, |users| { users.push(user.clone()); });
         }
-        if !Self::role_ids_by_user_in_space((user.clone(), role.space_id)).contains(&role_id) {
-          <RoleIdsByUserInSpace<T>>::mutate((user.clone(), role.space_id), |roles| { roles.push(role_id); })
+        if !Self::role_ids_by_user_in_space(user.clone(), role.space_id).contains(&role_id) {
+          <RoleIdsByUserInSpace<T>>::mutate(user.clone(), role.space_id, |roles| { roles.push(role_id); })
         }
       }
 

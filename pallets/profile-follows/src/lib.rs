@@ -9,15 +9,15 @@ use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed};
 
 use pallet_profiles::{Module as Profiles, SocialAccountById};
-use pallet_utils::vec_remove_on;
+use pallet_utils::remove_from_vec;
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait
-    + pallet_utils::Trait
-    + pallet_profiles::Trait
+pub trait Config: system::Config
+    + pallet_utils::Config
+    + pallet_profiles::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     type BeforeAccountFollowed: BeforeAccountFollowed<Self>;
 
@@ -26,7 +26,7 @@ pub trait Trait: system::Trait
 
 // This pallet's storage items.
 decl_storage! {
-    trait Store for Module<T: Trait> as ProfileFollowsModule {
+    trait Store for Module<T: Config> as ProfileFollowsModule {
         pub AccountFollowers get(fn account_followers):
             map hasher(blake2_128_concat) T::AccountId => Vec<T::AccountId>;
 
@@ -40,7 +40,7 @@ decl_storage! {
 
 decl_event!(
     pub enum Event<T> where
-        <T as system::Trait>::AccountId,
+        <T as system::Config>::AccountId,
     {
         AccountFollowed(/* follower */ AccountId, /* following */ AccountId),
         AccountUnfollowed(/* follower */ AccountId, /* unfollowing */ AccountId),
@@ -48,7 +48,7 @@ decl_event!(
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Follower social account was not found by id.
         FollowerAccountNotFound,
         /// Social account that is being followed was not found by id.
@@ -67,7 +67,7 @@ decl_error! {
 }
 
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
     // Initializing errors
     type Error = Error<T>;
@@ -119,8 +119,8 @@ decl_module! {
 
       <SocialAccountById<T>>::insert(follower.clone(), follower_account);
       <SocialAccountById<T>>::insert(account.clone(), followed_account);
-      <AccountsFollowedByAccount<T>>::mutate(follower.clone(), |account_ids| vec_remove_on(account_ids, account.clone()));
-      <AccountFollowers<T>>::mutate(account.clone(), |account_ids| vec_remove_on(account_ids, follower.clone()));
+      <AccountsFollowedByAccount<T>>::mutate(follower.clone(), |account_ids| remove_from_vec(account_ids, account.clone()));
+      <AccountFollowers<T>>::mutate(account.clone(), |account_ids| remove_from_vec(account_ids, follower.clone()));
       <AccountFollowedByAccount<T>>::remove((follower.clone(), account.clone()));
 
       Self::deposit_event(RawEvent::AccountUnfollowed(follower, account));
@@ -130,22 +130,22 @@ decl_module! {
 }
 
 /// Handler that will be called right before the account is followed.
-pub trait BeforeAccountFollowed<T: Trait> {
+pub trait BeforeAccountFollowed<T: Config> {
     fn before_account_followed(follower: T::AccountId, follower_reputation: u32, following: T::AccountId) -> DispatchResult;
 }
 
-impl<T: Trait> BeforeAccountFollowed<T> for () {
+impl<T: Config> BeforeAccountFollowed<T> for () {
     fn before_account_followed(_follower: T::AccountId, _follower_reputation: u32, _following: T::AccountId) -> DispatchResult {
         Ok(())
     }
 }
 
 /// Handler that will be called right before the account is unfollowed.
-pub trait BeforeAccountUnfollowed<T: Trait> {
+pub trait BeforeAccountUnfollowed<T: Config> {
     fn before_account_unfollowed(follower: T::AccountId, following: T::AccountId) -> DispatchResult;
 }
 
-impl<T: Trait> BeforeAccountUnfollowed<T> for () {
+impl<T: Config> BeforeAccountUnfollowed<T> for () {
     fn before_account_unfollowed(_follower: T::AccountId, _following: T::AccountId) -> DispatchResult {
         Ok(())
     }

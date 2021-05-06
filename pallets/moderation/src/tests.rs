@@ -3,7 +3,10 @@ use crate::*;
 
 use frame_support::{assert_ok, assert_noop};
 use pallet_posts::PostById;
-use pallet_utils::{Error as UtilsError};
+use pallet_utils::{
+    Error as UtilsError,
+    mock_functions::invalid_content_ipfs,
+};
 use pallet_spaces::{SpaceById, Error as SpaceError};
 
 #[test]
@@ -16,7 +19,7 @@ fn report_entity_should_work() {
         assert_eq!(report.created.account, ACCOUNT_SCOPE_OWNER);
         assert_eq!(report.reported_entity, EntityId::Post(POST1));
         assert_eq!(report.reported_within, SPACE1);
-        assert_eq!(report.reason, valid_content_ipfs_1());
+        assert_eq!(report.reason, valid_content_ipfs());
     });
 }
 

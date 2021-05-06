@@ -114,12 +114,12 @@ pub struct SpacePermissionsContext {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait {
+pub trait Config: system::Config {
   type DefaultSpacePermissions: Get<SpacePermissions>;
 }
 
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
     const DefaultSpacePermissions: SpacePermissions = T::DefaultSpacePermissions::get();
   }
 }
@@ -135,7 +135,7 @@ impl SpacePermission {
   }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
   fn get_overrides_or_defaults(
     overrides: Option<SpacePermissionSet>,

@@ -14,7 +14,7 @@ use df_traits::moderation::IsAccountBlocked;
 use pallet_permissions::SpacePermission;
 use pallet_posts::{Module as Posts, Post, PostById, PostId};
 use pallet_spaces::Module as Spaces;
-use pallet_utils::{Error as UtilsError, vec_remove_on, WhoAndWhen};
+use pallet_utils::{Error as UtilsError, remove_from_vec, WhoAndWhen};
 
 pub type ReactionId = u64;
 
@@ -31,7 +31,7 @@ impl Default for ReactionKind {
 }
 
 #[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
-pub struct Reaction<T: Trait> {
+pub struct Reaction<T: Config> {
     pub id: ReactionId,
     pub created: WhoAndWhen<T>,
     pub updated: Option<WhoAndWhen<T>>,
@@ -39,20 +39,20 @@ pub struct Reaction<T: Trait> {
 }
 
 /// The pallet's configuration trait.
-pub trait Trait: system::Trait
-    + pallet_utils::Trait
-    + pallet_posts::Trait
-    + pallet_spaces::Trait
+pub trait Config: system::Config
+    + pallet_utils::Config
+    + pallet_posts::Config
+    + pallet_spaces::Config
 {
     /// The overarching event type.
-    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+    type Event: From<Event<Self>> + Into<<Self as system::Config>::Event>;
 
     type PostReactionScores: PostReactionScores<Self>;
 }
 
 // This pallet's storage items.
 decl_storage! {
-    trait Store for Module<T: Trait> as ReactionsModule {
+    trait Store for Module<T: Config> as ReactionsModule {
         pub NextReactionId get(fn next_reaction_id): ReactionId = 1;
 
         pub ReactionById get(fn reaction_by_id):
@@ -68,7 +68,7 @@ decl_storage! {
 
 decl_event!(
     pub enum Event<T> where
-        <T as system::Trait>::AccountId,
+        <T as system::Config>::AccountId,
     {
         PostReactionCreated(AccountId, PostId, ReactionId),
         PostReactionUpdated(AccountId, PostId, ReactionId),
@@ -77,7 +77,7 @@ decl_event!(
 );
 
 decl_error! {
-    pub enum Error for Module<T: Trait> {
+    pub enum Error for Module<T: Config> {
         /// Reaction was not found by id.
         ReactionNotFound,
         /// Account has already reacted to this post/comment.
@@ -102,7 +102,7 @@ decl_error! {
 }
 
 decl_module! {
-  pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+  pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
     // Initializing errors
     type Error = Error<T>;
@@ -124,7 +124,7 @@ decl_module! {
       ensure!(!space.hidden, Error::<T>::CannotReactWhenSpaceHidden);
       ensure!(Posts::<T>::is_root_post_visible(post_id)?, Error::<T>::CannotReactWhenPostHidden);
 
-      ensure!(!T::IsAccountBlocked::is_account_blocked(owner.clone(), space.id), UtilsError::<T>::AccountIsBlocked);
+      ensure!(T::IsAccountBlocked::is_allowed_account(owner.clone(), space.id), UtilsError::<T>::AccountIsBlocked);
 
       let reaction_id = Self::insert_new_reaction(owner.clone(), kind);
 
@@ -178,7 +178,7 @@ decl_module! {
       ensure!(reaction.kind != new_kind, Error::<T>::SameReaction);
 
       if let Some(space_id) = post.try_get_space_id() {
-        ensure!(!T::IsAccountBlocked::is_account_blocked(owner.clone(), space_id), UtilsError::<T>::AccountIsBlocked);
+        ensure!(T::IsAccountBlocked::is_allowed_account(owner.clone(), space_id), UtilsError::<T>::AccountIsBlocked);
       }
 
       let old_kind = reaction.kind;
@@ -221,7 +221,7 @@ decl_module! {
 
       ensure!(owner == reaction.created.account, Error::<T>::NotReactionOwner);
       if let Some(space_id) = post.try_get_space_id() {
-        ensure!(!T::IsAccountBlocked::is_account_blocked(owner.clone(), space_id), UtilsError::<T>::AccountIsBlocked);
+        ensure!(T::IsAccountBlocked::is_allowed_account(owner.clone(), space_id), UtilsError::<T>::AccountIsBlocked);
       }
 
       match reaction.kind {
@@ -233,7 +233,7 @@ decl_module! {
 
       <PostById<T>>::insert(post_id, post.clone());
       <ReactionById<T>>::remove(reaction_id);
-      ReactionIdsByPostId::mutate(post.id, |ids| vec_remove_on(ids, reaction_id));
+      ReactionIdsByPostId::mutate(post.id, |ids| remove_from_vec(ids, reaction_id));
       <PostReactionIdByAccount<T>>::remove((owner.clone(), post_id));
 
       Self::deposit_event(RawEvent::PostReactionDeleted(owner, post_id, reaction_id));
@@ -242,7 +242,7 @@ decl_module! {
   }
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
     // FIXME: don't add reaction in storage before the checks in 'create_reaction' are done
     pub fn insert_new_reaction(account: T::AccountId, kind: ReactionKind) -> ReactionId {
@@ -262,11 +262,11 @@ impl<T: Trait> Module<T> {
 }
 
 /// Handler that will be called right before the post reaction is toggled.
-pub trait PostReactionScores<T: Trait> {
+pub trait PostReactionScores<T: Config> {
     fn score_post_on_reaction(actor: T::AccountId, post: &mut Post<T>, reaction_kind: ReactionKind) -> DispatchResult;
 }
 
-impl<T: Trait> PostReactionScores<T> for () {
+impl<T: Config> PostReactionScores<T> for () {
     fn score_post_on_reaction(_actor: T::AccountId, _post: &mut Post<T>, _reaction_kind: ReactionKind) -> DispatchResult {
         Ok(())
     }

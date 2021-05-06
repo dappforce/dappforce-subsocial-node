@@ -3,7 +3,7 @@ use super::*;
 use frame_support::dispatch::DispatchError;
 use pallet_permissions::SpacePermissionsContext;
 
-impl<T: Trait> Module<T> {
+impl<T: Config> Module<T> {
 
   /// Check that there is a `Role` with such `role_id` in the storage
   /// or return`RoleNotFound` error.
@@ -20,7 +20,7 @@ impl<T: Trait> Module<T> {
   /// Ensure that this account is not blocked and has 'ManageRoles' permission in a given space
   pub fn ensure_role_manager(account: T::AccountId, space_id: SpaceId) -> DispatchResult {
     ensure!(
-      !T::IsAccountBlocked::is_account_blocked(account.clone(), space_id),
+      T::IsAccountBlocked::is_allowed_account(account.clone(), space_id),
       UtilsError::<T>::AccountIsBlocked
     );
     Self::ensure_user_has_space_permission_with_load_space(
@@ -97,7 +97,7 @@ impl<T: Trait> Module<T> {
     error: DispatchError,
   ) -> DispatchResult {
 
-    let role_ids = Self::role_ids_by_user_in_space((user, space_id));
+    let role_ids = Self::role_ids_by_user_in_space(user, space_id);
 
     for role_id in role_ids {
       if let Some(role) = Self::role_by_id(role_id) {
@@ -122,7 +122,7 @@ impl<T: Trait> Module<T> {
   }
 }
 
-impl<T: Trait> Role<T> {
+impl<T: Config> Role<T> {
 
   pub fn new(
     created_by: T::AccountId,
@@ -169,11 +169,11 @@ impl<T: Trait> Role<T> {
     let mut users_by_role = <UsersByRoleId<T>>::take(self.id);
 
     for user in users.iter() {
-      let role_idx_by_user_opt = Module::<T>::role_ids_by_user_in_space((&user, self.space_id)).iter()
+      let role_idx_by_user_opt = Module::<T>::role_ids_by_user_in_space(&user, self.space_id).iter()
         .position(|x| { *x == self.id });
 
       if let Some(role_idx) = role_idx_by_user_opt {
-        <RoleIdsByUserInSpace<T>>::mutate((user, self.space_id), |n| { n.swap_remove(role_idx) });
+        <RoleIdsByUserInSpace<T>>::mutate(user, self.space_id, |n| { n.swap_remove(role_idx) });
       }
 
       let user_idx_by_role_opt = users_by_role.iter().position(|x| { x == user });
@@ -186,7 +186,7 @@ impl<T: Trait> Role<T> {
   }
 }
 
-impl<T: Trait> PermissionChecker for Module<T> {
+impl<T: Config> PermissionChecker for Module<T> {
   type AccountId = T::AccountId;
 
   fn ensure_user_has_space_permission(

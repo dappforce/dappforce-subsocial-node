@@ -1,7 +1,7 @@
 use crate::{SpacePermission as SP, SpacePermissions, SpacePermissionSet};
 
 use sp_std::iter::FromIterator;
-pub use sp_std::prelude::*;
+use sp_std::vec;
 use frame_support::parameter_types;
 
 parameter_types! {

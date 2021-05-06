@@ -1,6 +1,6 @@
 [package]
 name = 'df-integration-tests'
-version = '0.5.1'
+version = '0.7.0'
 authors = ['DappForce <dappforce@pm.me>']
 edition = '2018'
 license = 'GPL-3.0-only'
@@ -13,140 +13,60 @@ categories = ['cryptography::cryptocurrencies']
 [features]
 default = ['std']
 std = [
+    'codec/std',
+    'sp-io/std',
     'sp-runtime/std',
+    'sp-std/std',
+    'pallet-balances/std',
+    'pallet-timestamp/std',
     'frame-support/std',
     'frame-system/std',
-    'pallet-balances/std',
-    'sp-io/std',
-    'sp-std/std',
-#    'pallet-moderation/std',
-    'pallet-timestamp/std',
+    'pallet-moderation/std',
     'pallet-permissions/std',
-    'pallet-posts/std',
     'pallet-post-history/std',
-    'pallet-profiles/std',
-    'pallet-profile-history/std',
+    'pallet-posts/std',
     'pallet-profile-follows/std',
+    'pallet-profile-history/std',
+    'pallet-profiles/std',
     'pallet-reactions/std',
     'pallet-roles/std',
     'pallet-scores/std',
-    'pallet-spaces/std',
     'pallet-space-follows/std',
     'pallet-space-history/std',
     'pallet-space-ownership/std',
-    'pallet-utils/std'
+    'pallet-spaces/std',
+    'pallet-utils/std',
 ]
 
-[dependencies.sp-runtime]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
+[dependencies]
+codec = { package = 'parity-scale-codec', version = '2.0.0', default-features = false, features = ['derive'] }
 
-[dependencies.frame-support]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
+frame-support = { default-features = false, version = '3.0.0' }
+frame-system = { default-features = false, version = '3.0.0' }
+pallet-balances = { default-features = false, version = '3.0.0' }
+pallet-timestamp = { default-features = false, version = '3.0.0' }
+sp-io = { default-features = false, version = '3.0.0' }
+sp-runtime = { default-features = false, version = '3.0.0' }
+sp-std = { default-features = false, version = '3.0.0' }
 
-[dependencies.frame-system]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
+[dev-dependencies]
+serde = { version = '1.0.119' }
 
-[dependencies.pallet-balances]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
+pallet-moderation = { default-features = false, path = '../moderation' }
+pallet-permissions = { default-features = false, path = '../permissions' }
+pallet-post-history = { default-features = false, path = '../post-history' }
+pallet-posts = { default-features = false, path = '../posts' }
+pallet-profile-follows = { default-features = false, path = '../profile-follows' }
+pallet-profile-history = { default-features = false, path = '../profile-history' }
+pallet-profiles = { default-features = false, path = '../profiles' }
+pallet-reactions = { default-features = false, path = '../reactions' }
+pallet-roles = { default-features = false, path = '../roles' }
+pallet-scores = { default-features = false, path = '../scores' }
+pallet-space-follows = { default-features = false, path = '../space-follows' }
+pallet-space-history = { default-features = false, path = '../space-history' }
+pallet-space-ownership = { default-features = false, path = '../space-ownership' }
+pallet-spaces = { default-features = false, path = '../spaces' }
+pallet-utils = { default-features = false, path = '../utils' }
 
-[dependencies.sp-io]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dependencies.sp-std]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dependencies.pallet-timestamp]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dev-dependencies.pallet-permissions]
-default-features = false
-path = '../permissions'
-
-[dev-dependencies.pallet-posts]
-default-features = false
-path = '../posts'
-
-[dev-dependencies.pallet-post-history]
-default-features = false
-path = '../post-history'
-
-[dev-dependencies.pallet-profiles]
-default-features = false
-path = '../profiles'
-
-[dev-dependencies.pallet-profile-history]
-default-features = false
-path = '../profile-history'
-
-[dev-dependencies.pallet-profile-follows]
-default-features = false
-path = '../profile-follows'
-
-[dev-dependencies.pallet-reactions]
-default-features = false
-path = '../reactions'
-
-[dev-dependencies.pallet-roles]
-default-features = false
-path = '../roles'
-
-[dev-dependencies.pallet-scores]
-default-features = false
-path = '../scores'
-
-[dev-dependencies.pallet-spaces]
-default-features = false
-path = '../spaces'
-
-[dev-dependencies.pallet-space-follows]
-default-features = false
-path = '../space-follows'
-
-[dev-dependencies.pallet-space-history]
-default-features = false
-path = '../space-history'
-
-[dev-dependencies.pallet-space-ownership]
-default-features = false
-path = '../space-ownership'
-
-[dev-dependencies.pallet-utils]
-default-features = false
-path = '../utils'
-
-[dev-dependencies.sp-core]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dev-dependencies.pallet-balances]
-default-features = false
-git = 'https://github.com/paritytech/substrate.git'
-tag = 'v2.0.0-rc4'
-version = '2.0.0-rc4'
-
-[dev-dependencies.pallet-moderation]
-default-features = false
-path = '../moderation'
+sp-core = { default-features = false, version = '3.0.0' }
+pallet-balances = { default-features = false, version = '3.0.0' }

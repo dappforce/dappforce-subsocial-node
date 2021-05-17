@@ -1,9 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure,
     dispatch::DispatchResult,
-    traits::Get
+    weights::Weight
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed};
@@ -15,6 +18,11 @@ use df_traits::{
 use pallet_profiles::{Module as Profiles, SocialAccountById};
 use pallet_spaces::{BeforeSpaceCreated, Module as Spaces, Space, SpaceById};
 use pallet_utils::{Error as UtilsError, SpaceId, remove_from_vec};
+
+pub trait WeightInfo {
+    fn follow_space() -> Weight;
+    fn unfollow_space() -> Weight;
+}
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
@@ -28,6 +36,8 @@ pub trait Trait: system::Trait
     type BeforeSpaceFollowed: BeforeSpaceFollowed<Self>;
 
     type BeforeSpaceUnfollowed: BeforeSpaceUnfollowed<Self>;
+
+    type WeightInfo: WeightInfo;
 }
 
 decl_error! {
@@ -75,7 +85,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(5, 5)]
+    #[weight = <T as Trait>::WeightInfo::follow_space()]
     pub fn follow_space(origin, space_id: SpaceId) -> DispatchResult {
       let follower = ensure_signed(origin)?;
 
@@ -92,7 +102,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(5, 5)]
+    #[weight = <T as Trait>::WeightInfo::unfollow_space()]
     pub fn unfollow_space(origin, space_id: SpaceId) -> DispatchResult {
       let follower = ensure_signed(origin)?;
 
@@ -144,10 +154,8 @@ impl<T: Trait> Module<T> {
     }
 }
 
-impl<T: Trait> SpaceFollowsProvider for Module<T> {
-    type AccountId = T::AccountId;
-
-    fn is_space_follower(account: Self::AccountId, space_id: SpaceId) -> bool {
+impl<T: Trait> SpaceFollowsProvider<T::AccountId> for Module<T> {
+    fn is_space_follower(account: T::AccountId, space_id: SpaceId) -> bool {
         Module::<T>::space_followed_by_account((account, space_id))
     }
 }

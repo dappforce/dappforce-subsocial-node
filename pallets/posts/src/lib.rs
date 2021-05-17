@@ -4,6 +4,7 @@ use codec::{Decode, Encode};
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, fail,
     dispatch::{DispatchError, DispatchResult}, ensure, traits::Get,
+    weights::Weight
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
@@ -18,6 +19,8 @@ use pallet_utils::{
 };
 
 pub mod functions;
+mod benchmarking;
+pub mod weights;
 
 pub type PostId = u64;
 
@@ -74,6 +77,26 @@ impl Default for PostExtension {
     }
 }
 
+pub trait WeightInfo {
+    fn create_post() -> Weight;
+    fn update_post() -> Weight;
+    fn move_post() -> Weight;
+}
+
+impl<T: Trait>WeightInfo for Module<T> {
+    fn create_post() -> u64 {
+        todo!()
+    }
+
+    fn update_post() -> u64 {
+        todo!()
+    }
+
+    fn move_post() -> u64 {
+        todo!()
+    }
+}
+
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
     + pallet_utils::Trait
@@ -90,6 +113,8 @@ pub trait Trait: system::Trait
     type AfterPostUpdated: AfterPostUpdated<Self>;
 
     type IsPostBlocked: IsPostBlocked<PostId>;
+
+    type WeightInfo: WeightInfo;
 }
 
 pub trait PostScores<T: Trait> {
@@ -212,7 +237,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 100_000 + T::DbWeight::get().reads_writes(8, 8)]
+    #[weight = <T as Trait>::WeightInfo::create_post()]
     pub fn create_post(
       origin,
       space_id_opt: Option<SpaceId>,
@@ -270,7 +295,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 100_000 + T::DbWeight::get().reads_writes(5, 3)]
+    #[weight = <T as Trait>::WeightInfo::update_post()]
     pub fn update_post(origin, post_id: PostId, update: PostUpdate) -> DispatchResult {
       let editor = ensure_signed(origin)?;
 
@@ -346,7 +371,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = T::DbWeight::get().reads(1) + 50_000]
+    #[weight = <T as Trait>::WeightInfo::move_post()]
     pub fn move_post(origin, post_id: PostId, new_space_id: Option<SpaceId>) -> DispatchResult {
       let who = ensure_signed(origin)?;
 

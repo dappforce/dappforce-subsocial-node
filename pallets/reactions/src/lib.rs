@@ -1,10 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use codec::{Decode, Encode};
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure,
     dispatch::DispatchResult,
-    traits::Get
+    weights::Weight
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
@@ -38,6 +41,12 @@ pub struct Reaction<T: Trait> {
     pub kind: ReactionKind,
 }
 
+pub trait WeightInfo {
+    fn create_post_reaction() -> Weight;
+    fn update_post_reaction() -> Weight;
+    fn delete_post_reaction() -> Weight;
+}
+
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
     + pallet_utils::Trait
@@ -48,6 +57,8 @@ pub trait Trait: system::Trait
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
     type PostReactionScores: PostReactionScores<Self>;
+
+    type WeightInfo: WeightInfo;
 }
 
 // This pallet's storage items.
@@ -110,7 +121,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(6, 5)]
+    #[weight = <T as Trait>::WeightInfo::create_post_reaction()]
     pub fn create_post_reaction(origin, post_id: PostId, kind: ReactionKind) -> DispatchResult {
       let owner = ensure_signed(origin)?;
 
@@ -162,7 +173,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(3, 2)]
+    #[weight = <T as Trait>::WeightInfo::update_post_reaction()]
     pub fn update_post_reaction(origin, post_id: PostId, reaction_id: ReactionId, new_kind: ReactionKind) -> DispatchResult {
       let owner = ensure_signed(origin)?;
 
@@ -206,7 +217,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(4, 4)]
+    #[weight = <T as Trait>::WeightInfo::delete_post_reaction()]
     pub fn delete_post_reaction(origin, post_id: PostId, reaction_id: ReactionId) -> DispatchResult {
       let owner = ensure_signed(origin)?;
 

@@ -5,17 +5,19 @@ use frame_support::{
     decl_error, decl_event, decl_module, decl_storage,
     ensure,
     traits::Get,
-    dispatch::DispatchResult
+    dispatch::DispatchResult,
+    weights::Weight
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
 use frame_system::{self as system, ensure_signed};
 
 use df_traits::{
-    PermissionChecker, SpaceFollowsProvider, SpaceForRolesProvider,
+    PermissionChecker, SpaceFollowsProvider,
     moderation::{IsAccountBlocked, IsContentBlocked},
 };
 use pallet_permissions::{Module as Permissions, SpacePermission, SpacePermissionSet};
+
 use pallet_utils::{Module as Utils, Error as UtilsError, SpaceId, User, WhoAndWhen, Content};
 
 pub mod functions;
@@ -25,6 +27,8 @@ mod mock;
 
 #[cfg(test)]
 mod tests;
+mod benchmarking;
+pub mod weights;
 
 type RoleId = u64;
 
@@ -47,9 +51,18 @@ pub struct RoleUpdate {
     pub permissions: Option<SpacePermissionSet>,
 }
 
+pub trait WeightInfo {
+    fn create_role() -> Weight;
+    fn update_role() -> Weight;
+    fn delete_role() -> Weight;
+    fn grant_role() -> Weight;
+    fn revoke_role() -> Weight;
+}
+
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
     + pallet_permissions::Trait
+    + pallet_spaces::Trait
     + pallet_utils::Trait
 {
     /// The overarching event type.
@@ -57,13 +70,11 @@ pub trait Trait: system::Trait
 
     type MaxUsersToProcessPerDeleteRole: Get<u16>;
 
-    type Spaces: SpaceForRolesProvider<AccountId=Self::AccountId>;
-
-    type SpaceFollows: SpaceFollowsProvider<AccountId=Self::AccountId>;
-
     type IsAccountBlocked: IsAccountBlocked<Self::AccountId>;
 
     type IsContentBlocked: IsContentBlocked;
+
+    type WeightInfo: WeightInfo;
 }
 
 decl_event!(
@@ -144,7 +155,7 @@ decl_module! {
     /// `content` points to the off-chain content with such additional info about this role
     /// as its name, description, color, etc.
     /// Only the space owner or a user with `ManageRoles` permission call this dispatch.
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(2, 3)]
+    #[weight = <T as Trait>::WeightInfo::create_role()]
     pub fn create_role(
       origin,
       space_id: SpaceId,
@@ -157,7 +168,7 @@ decl_module! {
       ensure!(!permissions.is_empty(), Error::<T>::NoPermissionsProvided);
 
       Utils::<T>::is_valid_content(content.clone())?;
-      ensure!(T::IsContentBlocked::is_allowed_content(content.clone(), space_id), UtilsError::<T>::ContentIsBlocked);
+      ensure!(<T as Trait>::IsContentBlocked::is_allowed_content(content.clone(), space_id), UtilsError::<T>::ContentIsBlocked);
 
       Self::ensure_role_manager(who.clone(), space_id)?;
       
@@ -177,7 +188,7 @@ decl_module! {
 
     /// Update an existing role by its id.
     /// Only the space owner or a user with `ManageRoles` permission call this dispatch.
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(2, 1)]
+    #[weight = <T as Trait>::WeightInfo::update_role()]
     pub fn update_role(origin, role_id: RoleId, update: RoleUpdate) -> DispatchResult {
       let who = ensure_signed(origin)?;
 
@@ -204,7 +215,7 @@ decl_module! {
       if let Some(content) = update.content {
         if content != role.content {
           Utils::<T>::is_valid_content(content.clone())?;
-          ensure!(T::IsContentBlocked::is_allowed_content(content.clone(), role.space_id), UtilsError::<T>::ContentIsBlocked);
+          ensure!(<T as Trait>::IsContentBlocked::is_allowed_content(content.clone(), role.space_id), UtilsError::<T>::ContentIsBlocked);
 
           role.content = content;
           is_update_applied = true;
@@ -233,7 +244,7 @@ decl_module! {
 
     /// Delete a role from all associated storage items.
     /// Only the space owner or a user with `ManageRoles` permission call this dispatch.
-    #[weight = 1_000_000 + T::DbWeight::get().reads_writes(6, 5)]
+    #[weight = <T as Trait>::WeightInfo::delete_role()]
     pub fn delete_role(origin, role_id: RoleId) -> DispatchResult {
       let who = ensure_signed(origin)?;
 
@@ -265,7 +276,7 @@ decl_module! {
 
     /// Grant a role to a list of users.
     /// Only the space owner or a user with `ManageRoles` permission call this dispatch.
-    #[weight = 1_000_000 + T::DbWeight::get().reads_writes(4, 2)]
+    #[weight = <T as Trait>::WeightInfo::grant_role()]
     pub fn grant_role(origin, role_id: RoleId, users: Vec<User<T::AccountId>>) -> DispatchResult {
       let who = ensure_signed(origin)?;
 
@@ -291,7 +302,7 @@ decl_module! {
 
     /// Revoke a role from a list of users.
     /// Only the space owner or a user with `ManageRoles` permission call this dispatch.
-    #[weight = 1_000_000 + T::DbWeight::get().reads_writes(4, 2)]
+    #[weight = <T as Trait>::WeightInfo::revoke_role()]
     pub fn revoke_role(origin, role_id: RoleId, users: Vec<User<T::AccountId>>) -> DispatchResult {
       let who = ensure_signed(origin)?;
 

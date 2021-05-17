@@ -62,7 +62,7 @@ fn create_role_should_work_with_a_few_roles() {
 
 #[test]
 fn create_role_should_fail_with_space_not_found() {
-    ExtBuilder::build().execute_with(|| {
+    ExtBuilder::build_without_space().execute_with(|| {
         assert_noop!(
             _create_role(
                 None, // From ACCOUNT1
@@ -70,7 +70,7 @@ fn create_role_should_fail_with_space_not_found() {
                 None, // Without time_to_live
                 None, // With default content
                 None // With default permission set
-            ), "SpaceNotFound"
+            ), pallet_spaces::Error::<Test>::SpaceNotFound
         );
     });
 }

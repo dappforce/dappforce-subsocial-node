@@ -22,6 +22,12 @@ std = [
     'pallet-utils/std',
 ]
 
+runtime-benchmarks = [
+    "frame-benchmarking",
+    "frame-support/runtime-benchmarks",
+    "frame-system/runtime-benchmarks",
+]
+
 [dependencies.codec]
 default-features = false
 features = ['derive']
@@ -36,6 +42,7 @@ pallet-permissions = { default-features = false, path = '../permissions' }
 pallet-utils = { default-features = false, path = '../utils' }
 
 # Substrate dependencies
+frame-benchmarking = { default-features = false, optional = true, version = '2.0.1' }
 frame-support = { default-features = false, version = '2.0.1' }
 frame-system = { default-features = false, version = '2.0.1' }
 sp-runtime = { default-features = false, version = '2.0.1' }

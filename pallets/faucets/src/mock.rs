@@ -14,6 +14,7 @@ use frame_support::{
     dispatch::DispatchResult,
 };
 use frame_system as system;
+use crate::weights::WeightInfo;
 
 impl_outer_origin! {
     pub enum Origin for Test {}
@@ -104,6 +105,7 @@ impl pallet_utils::Trait for Test {
 impl Trait for Test {
     type Event = ();
     type Currency = Balances;
+    type WeightInfo = WeightInfo;
 }
 
 pub(crate) type System = system::Module<Test>;

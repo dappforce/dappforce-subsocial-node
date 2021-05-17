@@ -1,10 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use codec::{Decode, Encode};
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure,
     dispatch::DispatchResult,
-    traits::Get
+    weights::Weight
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
@@ -32,15 +35,23 @@ pub struct Profile<T: Trait> {
 pub struct ProfileUpdate {
     pub content: Option<Content>,
 }
+pub trait WeightInfo {
+    fn create_profile() -> Weight;
+    fn update_profile() -> Weight;
+}
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
     + pallet_utils::Trait
 {
+
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 
     type AfterProfileUpdated: AfterProfileUpdated<Self>;
+
+    type WeightInfo: WeightInfo;
+
 }
 
 // This pallet's storage items.
@@ -82,7 +93,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 100_000 + T::DbWeight::get().reads_writes(1, 2)]
+    #[weight = <T as Trait>::WeightInfo::create_profile()]
     pub fn create_profile(origin, content: Content) -> DispatchResult {
       let owner = ensure_signed(origin)?;
 
@@ -104,7 +115,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 100_000 + T::DbWeight::get().reads_writes(1, 2)]
+    #[weight = <T as Trait>::WeightInfo::update_profile()]
     pub fn update_profile(origin, update: ProfileUpdate) -> DispatchResult {
       let owner = ensure_signed(origin)?;
 

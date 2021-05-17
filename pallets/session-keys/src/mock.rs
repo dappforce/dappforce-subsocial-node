@@ -13,7 +13,7 @@ use frame_support::{
     dispatch::{DispatchResult},
 };
 
-use pallet_profile_follows::Call as ProfileFollowsCall;
+use pallet_profile_follows::{Call as ProfileFollowsCall};
 use frame_support::traits::Currency;
 pub use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
 
@@ -117,6 +117,7 @@ impl pallet_profile_follows::Trait for Test {
     type Event = ();
     type BeforeAccountFollowed = ();
     type BeforeAccountUnfollowed = ();
+    type WeightInfo = ();
 }
 
 parameter_types! {}
@@ -124,6 +125,7 @@ parameter_types! {}
 impl pallet_profiles::Trait for Test {
     type Event = ();
     type AfterProfileUpdated = ();
+    type WeightInfo = ();
 }
 
 // TODO export to a common place

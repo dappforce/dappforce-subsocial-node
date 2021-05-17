@@ -4,29 +4,20 @@ use frame_support::dispatch::{DispatchError, DispatchResult};
 
 use pallet_permissions::{
   SpacePermission,
-  SpacePermissions,
   SpacePermissionsContext
 };
 use pallet_utils::{SpaceId, User};
 
 pub mod moderation;
 
-/// Minimal set of fields from Space struct that are required by roles pallet.
-pub struct SpaceForRoles<AccountId> {
-  pub owner: AccountId,
-  pub permissions: Option<SpacePermissions>,
+pub trait SpaceFollowsProvider<AccountId> {
+  fn is_space_follower(account: AccountId, space_id: SpaceId) -> bool;
 }
 
-pub trait SpaceForRolesProvider {
-  type AccountId;
-
-  fn get_space(id: SpaceId) -> Result<SpaceForRoles<Self::AccountId>, DispatchError>;
-}
-
-pub trait SpaceFollowsProvider {
-  type AccountId;
-
-  fn is_space_follower(account: Self::AccountId, space_id: SpaceId) -> bool;
+impl<AccountId> SpaceFollowsProvider<AccountId> for () {
+  fn is_space_follower(_account: AccountId, _space_id: u64) -> bool {
+    true
+  }
 }
 
 pub trait PermissionChecker {

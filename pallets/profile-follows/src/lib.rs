@@ -1,15 +1,23 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage, ensure,
     dispatch::DispatchResult,
-    traits::Get
+    weights::Weight
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed};
 
 use pallet_profiles::{Module as Profiles, SocialAccountById};
 use pallet_utils::remove_from_vec;
+
+pub trait WeightInfo {
+    fn follow_account() -> Weight;
+    fn unfollow_account() -> Weight;
+}
 
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
@@ -22,6 +30,8 @@ pub trait Trait: system::Trait
     type BeforeAccountFollowed: BeforeAccountFollowed<Self>;
 
     type BeforeAccountUnfollowed: BeforeAccountUnfollowed<Self>;
+
+    type WeightInfo: WeightInfo;
 }
 
 // This pallet's storage items.
@@ -75,7 +85,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(4, 4)]
+    #[weight = <T as Trait>::WeightInfo::follow_account()]
     pub fn follow_account(origin, account: T::AccountId) -> DispatchResult {
       let follower = ensure_signed(origin)?;
 
@@ -102,7 +112,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(4, 4)]
+    #[weight = <T as Trait>::WeightInfo::unfollow_account()]
     pub fn unfollow_account(origin, account: T::AccountId) -> DispatchResult {
       let follower = ensure_signed(origin)?;
 

@@ -3800,6 +3800,7 @@ dependencies = [
 name = "pallet-faucets"
 version = "0.6.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
@@ -3906,6 +3907,7 @@ name = "pallet-posts"
 version = "0.6.0"
 dependencies = [
  "df-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
@@ -3921,11 +3923,13 @@ dependencies = [
 name = "pallet-profile-follows"
 version = "0.6.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-profiles",
  "pallet-utils",
  "parity-scale-codec",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -3946,6 +3950,7 @@ dependencies = [
 name = "pallet-profiles"
 version = "0.6.0"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
@@ -3975,6 +3980,7 @@ name = "pallet-reactions"
 version = "0.6.0"
 dependencies = [
  "df-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-permissions",
@@ -3991,10 +3997,12 @@ name = "pallet-roles"
 version = "0.6.0"
 dependencies = [
  "df-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
  "pallet-permissions",
+ "pallet-spaces",
  "pallet-timestamp",
  "pallet-utils",
  "parity-scale-codec",
@@ -4085,12 +4093,14 @@ name = "pallet-space-follows"
 version = "0.6.0"
 dependencies = [
  "df-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-profiles",
  "pallet-spaces",
  "pallet-utils",
  "parity-scale-codec",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -4129,11 +4139,13 @@ name = "pallet-space-ownership"
 version = "0.6.0"
 dependencies = [
  "df-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-spaces",
  "pallet-utils",
  "parity-scale-codec",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -4142,6 +4154,7 @@ name = "pallet-spaces"
 version = "0.6.0"
 dependencies = [
  "df-traits",
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",

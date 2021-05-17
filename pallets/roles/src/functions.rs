@@ -2,6 +2,7 @@ use super::*;
 
 use frame_support::dispatch::DispatchError;
 use pallet_permissions::SpacePermissionsContext;
+use pallet_spaces::Module as SpacesModule;
 
 impl<T: Trait> Module<T> {
 
@@ -20,7 +21,7 @@ impl<T: Trait> Module<T> {
   /// Ensure that this account is not blocked and has 'ManageRoles' permission in a given space
   pub fn ensure_role_manager(account: T::AccountId, space_id: SpaceId) -> DispatchResult {
     ensure!(
-      T::IsAccountBlocked::is_allowed_account(account.clone(), space_id),
+      <T as Trait>::IsAccountBlocked::is_allowed_account(account.clone(), space_id),
       UtilsError::<T>::AccountIsBlocked
     );
     Self::ensure_user_has_space_permission_with_load_space(
@@ -38,7 +39,7 @@ impl<T: Trait> Module<T> {
     error: DispatchError,
   ) -> DispatchResult {
 
-    let space = T::Spaces::get_space(space_id)?;
+    let space = SpacesModule::<T>::require_space(space_id)?;
 
     let mut is_owner = false;
     let mut is_follower = false;

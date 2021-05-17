@@ -24,7 +24,7 @@ mod tests {
     };
     use pallet_posts::{PostId, Post, PostUpdate, PostExtension, Comment, Error as PostsError};
     use pallet_profiles::{ProfileUpdate, Error as ProfilesError};
-    use pallet_profile_follows::Error as ProfileFollowsError;
+    use pallet_profile_follows::{Error as ProfileFollowsError};
     use pallet_reactions::{ReactionId, ReactionKind, PostReactionScores, Error as ReactionsError};
     use pallet_scores::ScoringAction;
     use pallet_spaces::{SpaceById, SpaceUpdate, Error as SpacesError};
@@ -132,6 +132,7 @@ mod tests {
         type PostScores = Scores;
         type AfterPostUpdated = PostHistory;
         type IsPostBlocked = Moderation;
+        type WeightInfo = ();
     }
 
     parameter_types! {}
@@ -144,6 +145,7 @@ mod tests {
         type Event = ();
         type BeforeAccountFollowed = Scores;
         type BeforeAccountUnfollowed = Scores;
+        type WeightInfo = ();
     }
 
     parameter_types! {}
@@ -151,6 +153,7 @@ mod tests {
     impl pallet_profiles::Trait for TestRuntime {
         type Event = ();
         type AfterProfileUpdated = ProfileHistory;
+        type WeightInfo = ();
     }
 
     parameter_types! {}
@@ -162,6 +165,7 @@ mod tests {
     impl pallet_reactions::Trait for TestRuntime {
         type Event = ();
         type PostReactionScores = Scores;
+        type WeightInfo = ();
     }
 
     parameter_types! {
@@ -171,10 +175,9 @@ mod tests {
     impl pallet_roles::Trait for TestRuntime {
         type Event = ();
         type MaxUsersToProcessPerDeleteRole = MaxUsersToProcessPerDeleteRole;
-        type Spaces = Spaces;
-        type SpaceFollows = SpaceFollows;
         type IsAccountBlocked = Moderation;
         type IsContentBlocked = Moderation;
+        type WeightInfo = ();
     }
 
     parameter_types! {
@@ -213,12 +216,14 @@ mod tests {
         type Event = ();
         type BeforeSpaceFollowed = Scores;
         type BeforeSpaceUnfollowed = Scores;
+        type WeightInfo = ();
     }
 
     parameter_types! {}
 
     impl pallet_space_ownership::Trait for TestRuntime {
         type Event = ();
+        type WeightInfo = ();
     }
 
     const HANDLE_DEPOSIT: u64 = 5;
@@ -236,6 +241,7 @@ mod tests {
         type IsAccountBlocked = Moderation;
         type IsContentBlocked = Moderation;
         type HandleDeposit = HandleDeposit;
+        type WeightInfo = ();
     }
 
     parameter_types! {}

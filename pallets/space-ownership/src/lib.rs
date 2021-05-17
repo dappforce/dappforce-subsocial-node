@@ -1,10 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+mod benchmarking;
+pub mod weights;
+
 use frame_support::{
     decl_error, decl_event, decl_module, decl_storage,
     ensure,
     dispatch::DispatchResult,
-    traits::Get
+    weights::Weight
 };
 use sp_std::prelude::*;
 use frame_system::{self as system, ensure_signed};
@@ -13,6 +16,12 @@ use df_traits::moderation::IsAccountBlocked;
 use pallet_spaces::{Module as Spaces, SpaceById, SpaceIdsByOwner};
 use pallet_utils::{Error as UtilsError, SpaceId, remove_from_vec};
 
+pub trait WeightInfo {
+    fn transfer_space_ownership() -> Weight;
+    fn accept_pending_ownership() -> Weight;
+    fn reject_pending_ownership() -> Weight;
+}
+
 /// The pallet's configuration trait.
 pub trait Trait: system::Trait
     + pallet_utils::Trait
@@ -20,6 +29,8 @@ pub trait Trait: system::Trait
 {
     /// The overarching event type.
     type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+    type WeightInfo: WeightInfo;
 }
 
 decl_error! {
@@ -65,7 +76,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
+    #[weight = <T as Trait>::WeightInfo::transfer_space_ownership()]
     pub fn transfer_space_ownership(origin, space_id: SpaceId, transfer_to: T::AccountId) -> DispatchResult {
       let who = ensure_signed(origin)?;
 
@@ -81,7 +92,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(2, 2)]
+    #[weight = <T as Trait>::WeightInfo::accept_pending_ownership()]
     pub fn accept_pending_ownership(origin, space_id: SpaceId) -> DispatchResult {
       let new_owner = ensure_signed(origin)?;
 
@@ -112,7 +123,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 10_000 + T::DbWeight::get().reads_writes(2, 1)]
+    #[weight = <T as Trait>::WeightInfo::reject_pending_ownership()]
     pub fn reject_pending_ownership(origin, space_id: SpaceId) -> DispatchResult {
       let who = ensure_signed(origin)?;
 

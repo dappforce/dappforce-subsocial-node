@@ -14,15 +14,11 @@ use sp_runtime::{
 use frame_support::{
     impl_outer_origin, parameter_types, assert_ok,
     weights::Weight,
-    dispatch::{DispatchResult, DispatchError}
+    dispatch::{DispatchResult}
 };
 use frame_system as system;
 
-use pallet_permissions::{
-    SpacePermission,
-    SpacePermission as SP,
-};
-use df_traits::{SpaceForRoles, SpaceFollowsProvider, SpaceForRolesProvider};
+use pallet_permissions::{SpacePermission, SpacePermission as SP};
 use pallet_utils::{SpaceId, User, Content};
 
 impl_outer_origin! {
@@ -91,6 +87,21 @@ impl pallet_balances::Trait for Test {
     type MaxLocks = ();
 }
 
+parameter_types! {}
+
+impl pallet_spaces::Trait for Test {
+    type Event = ();
+    type Currency = Balances;
+    type Roles = Roles;
+    type SpaceFollows = ();
+    type BeforeSpaceCreated = ();
+    type AfterSpaceUpdated = ();
+    type IsAccountBlocked = ();
+    type IsContentBlocked = ();
+    type HandleDeposit = ();
+    type WeightInfo = ();
+}
+
 parameter_types! {
     pub const MinHandleLen: u32 = 5;
     pub const MaxHandleLen: u32 = 50;
@@ -116,41 +127,18 @@ parameter_types! {
 impl Trait for Test {
     type Event = ();
     type MaxUsersToProcessPerDeleteRole = MaxUsersToProcessPerDeleteRole;
-    type Spaces = Roles;
-    type SpaceFollows = Roles;
     type IsAccountBlocked = ();
     type IsContentBlocked = ();
+    type WeightInfo = ();
 }
 
 type System = system::Module<Test>;
 type Balances = pallet_balances::Module<Test>;
+type Spaces = pallet_spaces::Module<Test>;
 pub(crate) type Roles = Module<Test>;
 
 pub type AccountId = u64;
 pub type BlockNumber = u64;
-
-impl<T: Trait> SpaceForRolesProvider for Module<T> {
-    type AccountId = AccountId;
-
-    // This function should return an error every time Space doesn't exist by SpaceId
-    // Currently, we have a list of valid space id's to check
-    fn get_space(id: SpaceId) -> Result<SpaceForRoles<Self::AccountId>, DispatchError> {
-        if self::valid_space_ids().contains(&id) {
-            return Ok(SpaceForRoles { owner: ACCOUNT1, permissions: None })
-        }
-
-        Err("SpaceNotFound".into())
-    }
-}
-
-impl<T: Trait> SpaceFollowsProvider for Module<T> {
-    type AccountId = AccountId;
-
-    fn is_space_follower(_account: Self::AccountId, _space_id: u64) -> bool {
-        true
-    }
-}
-
 
 pub struct ExtBuilder;
 
@@ -160,7 +148,24 @@ impl ExtBuilder {
             .build_storage::<Test>()
             .unwrap();
 
+
         let mut ext = TestExternalities::from(storage);
+
+        ext.execute_with(|| {
+            System::set_block_number(1);
+            assert_ok!(Spaces::create_space(Origin::signed(ACCOUNT1), None, None, Content::None, None));
+        });
+
+        ext
+    }
+
+    pub fn build_without_space() -> TestExternalities {
+        let storage = system::GenesisConfig::default()
+            .build_storage::<Test>()
+            .unwrap();
+
+        let mut ext = TestExternalities::from(storage);
+
         ext.execute_with(|| System::set_block_number(1));
 
         ext
@@ -175,6 +180,8 @@ impl ExtBuilder {
         ext.execute_with(|| {
             System::set_block_number(1);
             let user = User::Account(ACCOUNT2);
+
+            assert_ok!(Spaces::create_space(Origin::signed(ACCOUNT1), None, None, Content::None, None));
 
             assert_ok!(
             _create_role(
@@ -205,8 +212,8 @@ pub(crate) const ROLE2: RoleId = 2;
 pub(crate) const ROLE3: RoleId = 3;
 pub(crate) const ROLE4: RoleId = 4;
 
-pub(crate) const SPACE1: SpaceId = 1;
-pub(crate) const SPACE2: SpaceId = 2;
+pub(crate) const SPACE1: SpaceId = 1001;
+pub(crate) const SPACE2: SpaceId = 1002;
 
 pub(crate) fn default_role_content_ipfs() -> Content {
     Content::IPFS(b"QmRAQB6YaCyidP37UdDnjFY5vQuiBrcqdyoW1CuDgwxkD4".to_vec())
@@ -233,10 +240,6 @@ pub(crate) fn permission_set_updated() -> Vec<SpacePermission> {
 /// Permissions Set that includes random permissions
 pub(crate) fn permission_set_random() -> Vec<SpacePermission> {
     vec![SP::CreatePosts, SP::UpdateOwnPosts, SP::UpdateAnyPost, SP::UpdateEntityStatus]
-}
-
-pub(crate) fn valid_space_ids() -> Vec<SpaceId> {
-    vec![SPACE1]
 }
 
 /// Permissions Set that includes nothing

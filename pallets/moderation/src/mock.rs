@@ -113,12 +113,14 @@ impl pallet_spaces::Trait for Test {
     type IsAccountBlocked = Moderation;
     type IsContentBlocked = Moderation;
     type HandleDeposit = ();
+    type WeightInfo = ();
 }
 
 impl pallet_space_follows::Trait for Test {
     type Event = ();
     type BeforeSpaceFollowed = ();
     type BeforeSpaceUnfollowed = ();
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -131,6 +133,7 @@ impl pallet_posts::Trait for Test {
     type PostScores = ();
     type AfterPostUpdated = ();
     type IsPostBlocked = Moderation;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -140,15 +143,15 @@ parameter_types! {
 impl pallet_roles::Trait for Test {
     type Event = ();
     type MaxUsersToProcessPerDeleteRole = MaxUsersToProcessPerDeleteRole;
-    type Spaces = Spaces;
-    type SpaceFollows = SpaceFollows;
     type IsAccountBlocked = Moderation;
     type IsContentBlocked = Moderation;
+    type WeightInfo = ();
 }
 
 impl pallet_profiles::Trait for Test {
     type Event = ();
     type AfterProfileUpdated = ();
+    type WeightInfo = ();
 }
 
 parameter_types! {

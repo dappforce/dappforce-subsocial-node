@@ -16,12 +16,19 @@ std = [
     'serde',
     'codec/std',
     'sp-runtime/std',
+    'frame-benchmarking/std',
     'frame-support/std',
     'frame-system/std',
     'sp-std/std',
     'pallet-utils/std',
     'df-traits/std',
     'pallet-permissions/std'
+]
+
+runtime-benchmarks = [
+    "frame-benchmarking",
+    "frame-support/runtime-benchmarks",
+    "frame-system/runtime-benchmarks",
 ]
 
 [dependencies.codec]
@@ -40,6 +47,7 @@ pallet-utils = { default-features = false, path = '../utils' }
 pallet-permissions = { default-features = false, path = '../permissions' }
 
 # Substrate dependencies
+frame-benchmarking = { default-features = false, optional = true, version = '2.0.1' }
 frame-support = { default-features = false, version = '2.0.1' }
 frame-system = { default-features = false, version = '2.0.1' }
 sp-runtime = { default-features = false, version = '2.0.1' }

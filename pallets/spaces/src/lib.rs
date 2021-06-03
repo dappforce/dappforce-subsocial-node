@@ -29,7 +29,7 @@ use frame_support::{
 };
 use sp_runtime::RuntimeDebug;
 use sp_std::prelude::*;
-use frame_system::{self as system, ensure_signed};
+use frame_system::{self as system, ensure_signed, ensure_root};
 
 use df_traits::{
     SpaceForRoles, SpaceForRolesProvider, PermissionChecker, SpaceFollowsProvider,
@@ -83,7 +83,7 @@ pub struct Space<T: Trait> {
     pub permissions: Option<SpacePermissions>,
 }
 
-#[derive(Encode, Decode, Clone, Eq, PartialEq, RuntimeDebug)]
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
 #[allow(clippy::option_option)]
 pub struct SpaceUpdate {
     pub parent_id: Option<Option<SpaceId>>,
@@ -127,6 +127,8 @@ decl_error! {
     SpaceNotFound,
     /// Space handle is not unique.
     SpaceHandleIsNotUnique,
+    /// Handles are disabled in `PalletSettings`.
+    HandlesAreDisabled,
     /// Nothing to update in this space.
     NoUpdatesForSpace,
     /// Only space owners can manage this space.
@@ -137,11 +139,18 @@ decl_error! {
     NoPermissionToCreateSubspaces,
     /// Space is at root level, no `parent_id` specified.
     SpaceIsAtRoot,
+    /// New space settings don't differ from the old ones.
+    NoSettingsUpdate,
   }
 }
 
 pub const FIRST_SPACE_ID: u64 = 1;
 pub const RESERVED_SPACE_COUNT: u64 = 1000;
+
+#[derive(Encode, Decode, Clone, Eq, PartialEq, Default, RuntimeDebug)]
+pub struct SpacesSettings {
+    pub disable_handles: bool
+}
 
 // This pallet's storage items.
 decl_storage! {
@@ -169,6 +178,8 @@ decl_storage! {
         /// Find the ids of all spaces owned, by a given account.
         pub SpaceIdsByOwner get(fn space_ids_by_owner):
             map hasher(twox_64_concat) T::AccountId => Vec<SpaceId>;
+
+        pub PalletSettings get(fn settings): SpacesSettings;
     }
     add_extra_genesis {
       config(endowed_account): T::AccountId;
@@ -197,7 +208,7 @@ decl_module! {
     // Initializing events
     fn deposit_event() = default;
 
-    #[weight = 500_000 + T::DbWeight::get().reads_writes(4, 4)]
+    #[weight = 500_000 + T::DbWeight::get().reads_writes(5, 4)]
     pub fn create_space(
       origin,
       parent_id_opt: Option<SpaceId>,
@@ -208,6 +219,9 @@ decl_module! {
       let owner = ensure_signed(origin)?;
 
       Utils::<T>::is_valid_content(content.clone())?;
+      if handle_opt.is_some() {
+        Self::ensure_handles_enabled()?;
+      }
 
       // TODO: add tests for this case
       if let Some(parent_id) = parent_id_opt {
@@ -245,7 +259,7 @@ decl_module! {
       Ok(())
     }
 
-    #[weight = 500_000 + T::DbWeight::get().reads_writes(2, 3)]
+    #[weight = 500_000 + T::DbWeight::get().reads_writes(3, 3)]
     pub fn update_space(origin, space_id: SpaceId, update: SpaceUpdate) -> DispatchResult {
       let owner = ensure_signed(origin)?;
 
@@ -348,6 +362,18 @@ decl_module! {
       }
       Ok(())
     }
+
+    #[weight = 10_000 + T::DbWeight::get().reads_writes(1, 1)]
+    pub fn update_settings(origin, new_settings: SpacesSettings) -> DispatchResult {
+      ensure_root(origin)?;
+
+      let space_settings = Self::settings();
+      ensure!(space_settings != new_settings, Error::<T>::NoSettingsUpdate);
+
+      PalletSettings::mutate(|settings| *settings = new_settings);
+
+      Ok(())
+    }
   }
 }
 
@@ -436,18 +462,6 @@ impl<T: Trait> Space<T> {
     }
 }
 
-impl Default for SpaceUpdate {
-    fn default() -> Self {
-        SpaceUpdate {
-            parent_id: None,
-            handle: None,
-            content: None,
-            hidden: None,
-            permissions: None,
-        }
-    }
-}
-
 impl<T: Trait> Module<T> {
 
     /// Check that there is a `Space` with such `space_id` in the storage
@@ -484,6 +498,11 @@ impl<T: Trait> Module<T> {
             permission,
             error,
         )
+    }
+    
+    pub fn ensure_handles_enabled() -> DispatchResult {
+        ensure!(!Self::settings().disable_handles, Error::<T>::HandlesAreDisabled);
+        Ok(())
     }
 
     pub fn try_move_space_to_root(space_id: SpaceId) -> DispatchResult {
@@ -571,6 +590,8 @@ impl<T: Trait> Module<T> {
         space: &Space<T>,
         maybe_new_handle: Option<Option<Vec<u8>>>,
     ) -> Result<bool, DispatchError> {
+        Self::ensure_handles_enabled()?;
+
         let mut is_handle_updated = false;
         if let Some(new_handle_opt) = maybe_new_handle {
             if let Some(old_handle) = space.handle.clone() {

@@ -297,7 +297,7 @@ fn _propose_change(
     origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
     space_id.unwrap_or(1),
     add_owners.unwrap_or_else(|| vec![ACCOUNT3]),
-    remove_owners.unwrap_or_else(|| vec![]),
+    remove_owners.unwrap_or_else(Vec::new),
     new_threshold.unwrap_or(Some(3)),
     notes.unwrap_or_else(self::change_note),
   )

@@ -25,7 +25,6 @@ use sp_runtime::RuntimeDebug;
 use sp_runtime::traits::{Saturating, Zero};
 use sp_std::{
     collections::btree_set::BTreeSet,
-    iter::FromIterator,
     prelude::*,
 };
 
@@ -134,7 +133,7 @@ decl_module! {
             drip_limit: BalanceOf<T>,
         ) -> DispatchResult {
 
-            ensure_root(origin.clone())?;
+            ensure_root(origin)?;
 
             Self::ensure_period_not_zero(period)?;
             Self::ensure_period_limit_not_zero(period_limit)?;
@@ -235,7 +234,7 @@ decl_module! {
 
             ensure!(!faucets.len().is_zero(), Error::<T>::NoFaucetsProvided);
 
-            let unique_faucets = BTreeSet::from_iter(faucets.iter());
+            let unique_faucets = faucets.iter().collect::<BTreeSet<_>>();
             for faucet in unique_faucets.iter() {
                 FaucetByAccount::<T>::remove(faucet);
             }

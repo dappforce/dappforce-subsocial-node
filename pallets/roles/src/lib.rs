@@ -18,7 +18,7 @@ use frame_support::{
     dispatch::DispatchResult
 };
 use sp_runtime::RuntimeDebug;
-use sp_std::{collections::btree_set::BTreeSet, iter::FromIterator, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, prelude::*};
 use frame_system::{self as system, ensure_signed};
 
 use df_traits::{
@@ -210,7 +210,7 @@ decl_module! {
 
       Self::ensure_role_manager(who.clone(), space_id)?;
       
-      let permissions_set = BTreeSet::from_iter(permissions.into_iter());
+      let permissions_set = permissions.into_iter().collect();
       let new_role = Role::<T>::new(who.clone(), space_id, time_to_live, content, permissions_set)?;
 
       // TODO review strange code:

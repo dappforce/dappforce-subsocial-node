@@ -21,6 +21,9 @@ std = [
     'sp-runtime/std',
     'sp-std/std',
     'sp-io/std',
+    'pallet-posts/std',
+    'pallet-spaces/std',
+    'pallet-utils/std',
 ]
 
 [dependencies]

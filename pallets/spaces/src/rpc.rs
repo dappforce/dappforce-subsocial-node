@@ -89,7 +89,7 @@ impl<T: Trait> Module<T> {
         let mut spaces = Vec::new();
 
         while spaces.len() < limit as usize && space_id >= FIRST_SPACE_ID {
-            if let Some(space) = Self::require_space(space_id).ok() {
+            if let Ok(space) = Self::require_space(space_id) {
                 if filter(&space) {
                     spaces.push(space.into());
                 }

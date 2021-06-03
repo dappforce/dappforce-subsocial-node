@@ -319,28 +319,28 @@ mod tests {
         /// Custom ext configuration with SpaceId 1 and BlockNumber 1
         pub fn build_with_space() -> TestExternalities {
             let mut ext = Self::build();
-            ext.execute_with(|| Self::add_default_space());
+            ext.execute_with(Self::add_default_space);
             ext
         }
 
         /// Custom ext configuration with SpaceId 1, PostId 1 and BlockNumber 1
         pub fn build_with_post() -> TestExternalities {
             let mut ext = Self::build();
-            ext.execute_with(|| Self::add_post());
+            ext.execute_with(Self::add_post);
             ext
         }
 
         /// Custom ext configuration with SpaceId 1, PostId 1, PostId 2 (as comment) and BlockNumber 1
         pub fn build_with_comment() -> TestExternalities {
             let mut ext = Self::build();
-            ext.execute_with(|| Self::add_comment());
+            ext.execute_with(Self::add_comment);
             ext
         }
 
         /// Custom ext configuration with SpaceId 1-2, PostId 1 where BlockNumber 1
         pub fn build_with_post_and_two_spaces() -> TestExternalities {
             let mut ext = Self::build_with_post();
-            ext.execute_with(|| Self::add_space_with_no_handle());
+            ext.execute_with(Self::add_space_with_no_handle);
             ext
         }
 
@@ -985,7 +985,7 @@ mod tests {
             origin.unwrap_or_else(|| Origin::signed(ACCOUNT1)),
             entity.unwrap_or(EntityId::Post(POST1)),
             scope.unwrap_or(SPACE1),
-            reason.unwrap_or_else(|| valid_content_ipfs()),
+            reason.unwrap_or_else(valid_content_ipfs),
         )
     }
 
@@ -2523,7 +2523,7 @@ mod tests {
         ExtBuilder::build_with_post().execute_with(|| {
             assert_ok!(_create_comment(None, None, Some(None), None)); // PostId 2
 
-            for parent_id in 2..11 as PostId {
+            for parent_id in 2..11_u64 {
                 assert_ok!(_create_comment(None, None, Some(Some(parent_id)), None)); // PostId N (last = 10)
             }
 

@@ -195,7 +195,7 @@ decl_module! {
 
       let new_space_owners = SpaceOwners {
         created: WhoAndWhen::<T>::new(who.clone()),
-        space_id: space_id,
+        space_id,
         owners: unique_owners.clone(),
         threshold,
         changes_count: 0
@@ -256,9 +256,9 @@ decl_module! {
         created: WhoAndWhen::<T>::new(who.clone()),
         id: change_id,
         space_id,
-        add_owners: add_owners,
-        remove_owners: remove_owners,
-        new_threshold: new_threshold,
+        add_owners,
+        remove_owners,
+        new_threshold,
         notes,
         confirmed_by: Vec::new(),
         expires_at: <system::Module<T>>::block_number() + T::BlocksToLive::get()

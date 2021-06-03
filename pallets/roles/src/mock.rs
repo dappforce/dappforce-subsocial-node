@@ -4,7 +4,6 @@ use sp_core::H256;
 use sp_std::{
     collections::btree_set::BTreeSet,
     prelude::Vec,
-    iter::FromIterator
 };
 use sp_io::TestExternalities;
 
@@ -288,9 +287,7 @@ pub(crate) fn _update_role(
         update.unwrap_or_else(|| self::role_update(
             Some(true),
             Some(self::updated_role_content_ipfs()),
-            Some(
-                BTreeSet::from_iter(self::permission_set_updated().into_iter())
-            )
+            Some(self::permission_set_updated().into_iter().collect())
         )),
     )
 }

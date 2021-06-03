@@ -322,8 +322,8 @@ impl<T: Trait> Module<T> {
 
     fn smooth_reputation(reputation: u32) -> u8 {
         log_2(reputation).map_or(1, |r| {
-            let d = (reputation as u64 - (2 as u64).pow(r)) * 100
-                / (2 as u64).pow(r);
+            let d = (reputation as u64 - (2_u64).pow(r)) * 100
+                / (2_u64).pow(r);
 
             // We can safely cast this result to i16 because a score diff for u32::MAX is 32.
             (((r + 1) * 100 + d as u32) / 100) as u8

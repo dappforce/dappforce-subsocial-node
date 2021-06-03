@@ -101,7 +101,7 @@ decl_module! {
       <SpaceById<T>>::insert(space_id, space);
 
       // Remove space id from the list of spaces by old owner
-      <SpaceIdsByOwner<T>>::mutate(old_owner.clone(), |space_ids| remove_from_vec(space_ids, space_id));
+      <SpaceIdsByOwner<T>>::mutate(old_owner, |space_ids| remove_from_vec(space_ids, space_id));
 
       // Add space id to the list of spaces by new owner
       <SpaceIdsByOwner<T>>::mutate(new_owner.clone(), |ids| ids.push(space_id));

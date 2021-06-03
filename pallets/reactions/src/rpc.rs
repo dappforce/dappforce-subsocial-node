@@ -67,7 +67,7 @@ impl<T: Trait> Module<T> {
 
         while reactions.len() < limit as usize {
             if let Some(reaction_id) = reaction_ids.get(i) {
-                if let Some(reaction) = Self::require_reaction(*reaction_id).ok() {
+                if let Ok(reaction) = Self::require_reaction(*reaction_id) {
                     reactions.push(reaction.into());
                 }
             }

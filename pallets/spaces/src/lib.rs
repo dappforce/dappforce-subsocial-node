@@ -581,7 +581,7 @@ impl<T: Trait> Module<T> {
                         // Change the current handle to a new one
 
                         // Validate data first
-                        let old_handle_lc = Utils::<T>::lowercase_handle(old_handle.clone());
+                        let old_handle_lc = Utils::<T>::lowercase_handle(old_handle);
                         let new_handle_lc = Self::lowercase_and_ensure_unique_handle(new_handle)?;
 
                         // Update storage once data is valid
@@ -591,12 +591,12 @@ impl<T: Trait> Module<T> {
                     }
                 } else {
                     // Unreserve the current handle
-                    Self::unreserve_handle(space, old_handle.clone())?;
+                    Self::unreserve_handle(space, old_handle)?;
                     is_handle_updated = true;
                 }
             } else if let Some(new_handle) = new_handle_opt {
                 // Reserve a handle for the space that has no handle yet
-                Self::reserve_handle(space, new_handle.clone())?;
+                Self::reserve_handle(space, new_handle)?;
                 is_handle_updated = true;
             }
         }

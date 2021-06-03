@@ -289,7 +289,7 @@ pub(crate) fn _report_entity(
         origin.unwrap_or_else(|| Origin::signed(ACCOUNT_SCOPE_OWNER)),
         entity.unwrap_or(EntityId::Post(POST1)),
         scope.unwrap_or(SPACE1),
-        reason.unwrap_or_else(|| valid_content_ipfs()),
+        reason.unwrap_or_else(valid_content_ipfs),
     )
 }
 
@@ -359,7 +359,7 @@ pub(crate) fn _update_moderation_settings(
     Moderation::update_moderation_settings(
         origin.unwrap_or_else(|| Origin::signed(ACCOUNT_SCOPE_OWNER)),
         space_id.unwrap_or(SPACE1),
-        settings_update.unwrap_or_else(|| new_autoblock_threshold()),
+        settings_update.unwrap_or_else(new_autoblock_threshold),
     )
 }
 

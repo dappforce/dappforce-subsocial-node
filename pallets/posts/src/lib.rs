@@ -242,14 +242,25 @@ decl_error! {
         NoPermissionToCreatePosts,
         /// User has no permission to create comments (aka replies) in this space.
         NoPermissionToCreateComments,
+
         /// User has no permission to share posts/comments from this space to another space.
         NoPermissionToShare,
-        /// User has no permission to update any posts in this space.
+
+        /// User has no permission to update posts of other users in this space.
         NoPermissionToUpdateAnyPost,
         /// A post owner is not allowed to update their own posts in this space.
         NoPermissionToUpdateOwnPosts,
         /// A comment owner is not allowed to update their own comments in this space.
         NoPermissionToUpdateOwnComments,
+
+        /// User has no permission to hide posts of other users in this space.
+        NoPermissionToHideAnyPost,
+        /// User has no permission to hide comments of other users in this space.
+        NoPermissionToHideAnyComment,
+        /// A post owner is not allowed to hide their own posts in this space.
+        NoPermissionToHideOwnPosts,
+        /// A comment owner is not allowed to hide their own comments in this space.
+        NoPermissionToHideOwnComments,
     }
 }
 
@@ -326,18 +337,26 @@ decl_module! {
     pub fn update_post(origin, post_id: PostId, update: PostUpdate) -> DispatchResult {
       let editor = ensure_signed(origin)?;
 
-      let has_updates =
-        update.content.is_some() ||
-        update.hidden.is_some();
+      let updates_hidden = update.hidden.is_some();
+      let updates_content = update.content.is_some();
+      let has_updates = updates_content || updates_hidden;
 
       ensure!(has_updates, Error::<T>::NoUpdatesForPost);
 
       let mut post = Self::require_post(post_id)?;
-      let mut space_opt = post.try_get_space();
+      let space_opt = &mut post.try_get_space();
 
       if let Some(space) = &space_opt {
         ensure!(T::IsAccountBlocked::is_allowed_account(editor.clone(), space.id), UtilsError::<T>::AccountIsBlocked);
-        Self::ensure_account_can_update_post(&editor, &post, space)?;
+
+        if updates_hidden {
+          Self::ensure_account_can_update_hidden_status(&editor, &post, space)?;
+        }
+        if updates_content {
+          Self::ensure_account_can_update_post(&editor, &post, space)?;
+        }
+      } else {
+        post.ensure_owner(&editor)?;
       }
 
       let mut is_update_applied = false;
@@ -361,25 +380,14 @@ decl_module! {
       }
 
       if let Some(hidden) = update.hidden {
-        if hidden != post.hidden {
-          space_opt = space_opt.map(|mut space| {
-            if hidden {
-              space.inc_hidden_posts();
-            } else {
-              space.dec_hidden_posts();
-            }
+        let old_hidden = post.hidden;
+        let hidden_changed = post.change_hidden(hidden, space_opt).is_ok();
 
-            space
-          });
-
-          if let PostExtension::Comment(comment_ext) = post.extension {
-            Self::update_counters_on_comment_hidden_change(&comment_ext, hidden)?;
-          }
-
-          old_data.hidden = Some(post.hidden);
-          post.hidden = hidden;
-          is_update_applied = true;
+        if hidden_changed {
+          old_data.hidden = Some(old_hidden);
         }
+
+        is_update_applied |= hidden_changed;
       }
 
       // Update this post only if at least one field should be updated:
